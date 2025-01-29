@@ -30,8 +30,11 @@ interface SiteManagerProps {
   maxLat?: number;
   maxLng?: number;
   type: string;
+  traceActive: boolean;
   selectedSites?: Set<string>;
+  zoom ?:number ;
   children: ReactElement<SiteManagerChildProps>;
+  setTraceActive: (active: boolean) => void;
 }
 
 interface SiteManagerChildProps {
@@ -53,6 +56,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({
   maxLat,
   maxLng,
   type,
+  zoom,
+  traceActive,
+  setTraceActive,
   selectedSites,
   children,
 }) => {
@@ -61,7 +67,23 @@ const SiteManager: React.FC<SiteManagerProps> = ({
   const [value, setValue] = useState<string>(type);
   const [colors, setColors] = useState<string[]>([]); 
   const [colorDomain, setColorDomain] = useState<number[]>([]);
-  
+  const [markerSize, setMarkerSize] = useState<number>(4); 
+  useEffect(()=>{
+   
+    if(zoom && map)
+    {
+        setMarkerSize(zoom + 3);        
+        updateMarkerSize(markerSize);
+    }
+  }, [zoom, map])
+
+
+
+  const toggleTraceActive = (active: boolean) => {
+    const newTraceActive = active;
+    setTraceActive(newTraceActive); 
+  };
+
   useEffect(() => {
     const colors = ["blue", "teal", "green", "chartreuse", "yellow", "orange", "red"];
     let domain: number[];
@@ -80,6 +102,13 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     setColorDomain(domain);
   }, [type]); 
 
+  //useEffect(()=>{
+  //    if (map) {
+  //      const size = markerSize ?? 4;
+  //      updateMarkerSize(size);
+  //  }
+  //},[]);
+  //
   // Previous issue: setColorDomain would run inconsistently so setColor would happen without updated domain
   // Fixed through adding an effect for when Domain is fully changed
   useEffect(() =>{
@@ -87,7 +116,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     fetchMarkers();
   }, [colorDomain]);
 
-
+    
+  useEffect(()=>{
+  }, [traceActive])
   // FIXED:(IN LISTENER CALLING ALL minLat...maxLng was doing a segmented call just calling the last object to be set (MaxLng fixed auto loading prevention)) 
   useEffect(() => {
     fetchSites();
@@ -140,7 +171,15 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       console.error("Error fetching sites:", error);
     }
   };
-
+    const updateMarkerSize = (size: number) => {
+            map.eachLayer((layer: L.Layer) => {
+              if (layer instanceof L.CircleMarker) {
+                layer.setStyle({
+                  radius: size,
+                });
+              }
+            });
+    };
   const fetchMarkers = async () => {
     try {
       const params = new URLSearchParams();
@@ -210,7 +249,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           // Create the circle marker
           const cruiseMarker = L.circleMarker([latlng.lat, latlng.lng], {
             color: setColor(value),
-            radius: 4,
+            radius: markerSize,
             fillOpacity: 0.9,
             stroke: false,
             interactive: true,
@@ -219,6 +258,8 @@ const SiteManager: React.FC<SiteManagerProps> = ({
             date: date,
             originalColor: setColor(value),
           }).addTo(siteGroups[site]);
+          
+
 
           // Bind click event to change opacity of markers in the same group
           cruiseMarker.on("click", () => {
@@ -259,6 +300,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           // Function to clear all polylines from the map
           const clearMap = () => {
             // Iterate over all layers in the map
+            toggleTraceActive(false);
             for (const i in map._layers) {
               // Check if the layer is a polyline
               if (
@@ -280,7 +322,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
                 layer.setStyle({
                   color: layer.options.originalColor,
                   fillOpacity: 0.9,
-                  radius: 4,
+                  radius: markerSize,
                   weight: 2,
                   opacity: 1,
                   interactive: true,
@@ -312,7 +354,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
                     fillOpacity: 1,
                     color: layer.options.originalColor,
                     weight: 2,
-                    radius: 8,
+                    radius:  8,
                     opacity: 1,
                     interactive: true,
                   });
@@ -336,7 +378,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
                     fillOpacity: 0.3,
                     color: "grey",
                     weight: 2,
-                    radius: 4,
+                    radius: markerSize,
                     opacity: 0.3,
                     interactive: false,
                   });
@@ -346,10 +388,13 @@ const SiteManager: React.FC<SiteManagerProps> = ({
               }
             });
           };
+       
+
           const drawPolyline = (site: string, markers: Marker[]) => {
             // Remove previous polyline if exists
 
             clearMap();
+            setTraceActive(true);
             const oldPolylineGroup = sitePolylineGroups[site];
             if (oldPolylineGroup) {
               oldPolylineGroup.eachLayer((layer: L.Layer) => {

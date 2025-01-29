@@ -40,8 +40,8 @@ def process_file(file_path, start_date, end_date, bounds):
         # Row 5 is the header and the data starts from row 6
         df = pd.read_csv(
             file_path, skiprows=4, encoding="latin-1"
-        )  # Skip first 4 lines
-
+        )  # Skip first 4 line
+        print(f"reading file {file_path}")
         date_format = "%d:%m:%Y"  # Key Date(dd:mm:yyyy)
 
         # Convert 'Date(dd:mm:yyyy)' column to datetime format from front end
@@ -70,7 +70,7 @@ def process_file(file_path, start_date, end_date, bounds):
             df = df[df["Date(dd:mm:yyyy)"] >= start_date]
         if end_date:
             df = df[df["Date(dd:mm:yyyy)"] <= end_date]
-
+        
         # Filter by set boundaries
         if bounds["min_lat"]:
             df = df[df["Latitude"] >= float(bounds["min_lat"])]
@@ -81,6 +81,8 @@ def process_file(file_path, start_date, end_date, bounds):
         if bounds["max_lng"]:
             df = df[df["Longitude"] <= float(bounds["max_lng"])]
 
+        print(f"Number of columns after filtering: {df.shape[1]}")
+            
         if df.empty:
             return
 
@@ -235,7 +237,9 @@ def download_data(request):
         print(f"copying files {complete_files}")
 
         # -Bulk copy all files to directory.
-        subprocess.run(["cp -r"] + complete_files + [temp_dir])
+
+        subprocess.run(["cp", "-r"] + complete_files + [temp_dir])
+
         if "AOD" in retrievals:
             subprocess.run(
                 f"mv {temp_dir}/*.lev* {os.path.join(temp_dir, 'AOD')}",
@@ -283,7 +287,7 @@ def download_data(request):
                 )
 
         # Multiprocessing implementation
-        with ProcessPoolExecutor(max_workers=4) as executor:
+        with ProcessPoolExecutor(max_workers=5) as executor:
             futures = []
             for file_path in files:
                 futures.append(

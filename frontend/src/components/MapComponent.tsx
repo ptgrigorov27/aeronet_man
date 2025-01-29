@@ -63,6 +63,7 @@ const CustomMapLayer: React.FC = () => {
     map.addLayer(references);
     //createColorLegend().addTo(map);
 
+    map.options.preferCanvas = true;
     map.setMinZoom(1);
     map.setMaxZoom(19);
     map.setMaxBounds([

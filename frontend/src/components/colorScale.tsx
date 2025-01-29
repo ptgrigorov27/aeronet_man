@@ -1,16 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, Grid } from '@mui/material';
 import * as d3 from 'd3-scale';
 import {Tooltip, OverlayTrigger } from 'react-bootstrap';
 
 interface ColorLegendProps {
-  type:string;
+  type: string,
+  activateTrace: boolean;
 }
-const ColorLegend: React.FC<ColorLegendProps> = ({type}) => {
+const ColorLegend: React.FC<ColorLegendProps> = ({type, activateTrace}) => {
   let markerDomain: number[] = [];
   let markerTicks: number[] = [];
   let traceDomain: number[] = [0, 5];
   let traceTicks: number[] = [0, 2.5, 5];
+  const [traceActive, setTraceActive] = useState(false);
+
+
+  useEffect(() => {
+      console.log("colorLegend: "+ activateTrace)
+    setTraceActive(activateTrace ? true : false);
+  }, [activateTrace]);
 
 if (type.includes("std") || type.includes("aod")) {
     markerDomain = Array.from({ length: 6 }, (_, i) => parseFloat((i * 0.1).toFixed(1)));
@@ -64,7 +72,7 @@ if (type.includes("std") || type.includes("aod")) {
       
       <OverlayTrigger
         placement="top"
-        overlay={<Tooltip id="tooltip-top">Marker Value Scale Legend</Tooltip>}
+        overlay={<Tooltip id="tooltip-top">Marker Scale</Tooltip>}
       >
         <Box
           sx={{
@@ -127,10 +135,10 @@ if (type.includes("std") || type.includes("aod")) {
           ))}
         </Grid>
       </Box>
-
+     { traceActive && (<>
       <OverlayTrigger
         placement="top"
-        overlay={<Tooltip id="tooltip-top">Cruise Trace Legend</Tooltip>}
+        overlay={<Tooltip id="tooltip-top">Cruise Path</Tooltip>}
       >
         <Box
           sx={{
@@ -148,7 +156,8 @@ if (type.includes("std") || type.includes("aod")) {
       <Grid container justifyContent="space-between" sx={{ width: '280px', marginTop: '20px', margin: '0 auto' }}>
         <Typography variant="caption">Start</Typography>
         <Typography variant="caption">End</Typography>
-      </Grid>
+      </Grid>   
+      </>)}
     </Box>
   );
 };

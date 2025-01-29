@@ -214,7 +214,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
             Select All
           </button>
         </div>
-        {/* Dynamic gap between boundry buttons */}
+        {/* Gap betwen boundry buttons */}
         <div style={{ width: "2%" }}></div>
         <div className="w-50">
           <button
@@ -225,6 +225,9 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
           </button>
         </div>
       </div>
+      <p className="text-center">
+      Cruises available for selection: {filteredSites.length}
+      </p>
       {filteredSites.length > 0 ? (
         <List
           height={400}
@@ -235,7 +238,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
           {Row}
         </List>
       ) : (
-        <div>No Results Found, try a different input.</div>
+        <div>No Results Found, try another cruise.</div>
       )}
     </div>
   );
