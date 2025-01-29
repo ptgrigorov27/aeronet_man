@@ -448,14 +448,17 @@ const SidePanel: React.FC = () => {
         onClick={handleToggleDownloadModal}
         className="w-100"
         >Download</Button>
+        
+        {/*
         <hr className={styles.separator} />
         <Button
-        variant="info"
-        onClick={() => window.location.href = 'mailto:terrell.credle@nasa.gov?cc=pawan.gupta@nasa.gov&subject=' + encodeURIComponent('[BUG REPORT] MAN VISUALIZATION TOOL') + '&body=' + encodeURIComponent('[DELETE THIS]\nIf applicable, please attach screenshots and explain the issue you are experiencing. Thank you.\n[DELETE THIS]')}
+        variant="danger"
+        onClick={() => window.location.href = 'mailto:terrell.credle@nasa.gov?cc=pawan.gupta@nasa.gov&subject=' + encodeURIComponent('[BUG REPORT] MAN VISUALIZATION TOOL') + '&body=' + encodeURIComponent('If applicable, please attach screenshots and explain the issue you are experiencing.')}
         className="w-100 btn-sm"
         >
-        🐞 Report a bug 
+        Report an issue 
         </Button>
+        */}
         </div>
         </Card.Body>
         </Card>
