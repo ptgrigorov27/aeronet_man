@@ -22,16 +22,17 @@ const SidePanel: React.FC = () => {
     const { setBounds, sites } = useSiteContext();
     const [zoomLevel, setZoomLevel] = useState(map?.getZoom() || 2);
     const [showModal, setShowModal] = useState(false);
-    const [markerSize, setMarkerSize] = useState<number>(4);
+    const [markerSize, setMarkerSize] = useState<number>();
     const [showDownloadModal, setShowDownloadModal] = useState(false);
     const [showDataModal, setShowDataModal] = useState(false);
     const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
+    const [tempSites, setTempSites] = useState<Set<string>>(new Set());
     const [startDate, setStartDate] = useState<string>("");
     const [endDate, setEndDate] = useState<string>("");
-    const [minLat, setMinLat] = useState<number>();
-    const [minLng, setMinLng] = useState<number>();
-    const [maxLat, setMaxLat] = useState<number>();
-    const [maxLng, setMaxLng] = useState<number>();
+    const [minLat, setMinLat] = useState<number | undefined>(undefined);
+    const [minLng, setMinLng] = useState<number | undefined>(undefined);
+    const [maxLat, setMaxLat] = useState<number | undefined>(undefined);
+    const [maxLng, setMaxLng] = useState<number | undefined>(undefined);
     const [rectangle, setRectangle] = useState<L.Rectangle | null>(null);
     const [drawing, setDrawing] = useState(false);
     const [rectangleDrawn, setRectangleDrawn] = useState(false);
@@ -48,7 +49,8 @@ const SidePanel: React.FC = () => {
 
     //set initial marker size
     useEffect(()=>{
-        setMarkerSize(4);
+        setZoomLevel(2);
+        setMarkerSize((zoomLevel + 2) * (Math.E - 1))
     },[]);
 
 
@@ -126,7 +128,6 @@ const SidePanel: React.FC = () => {
 
 
 
-
     const handleDownload = async () => {
         const params = {
             sites: Array.from(selectedSites),
@@ -178,11 +179,10 @@ const SidePanel: React.FC = () => {
     {
         /********************/
     }
-    const handleDateChange = useCallback((startDate: string, endDate: string) => {
-        console.log("Date Range Updated:", startDate, endDate);
+    const handleDateChange = (startDate: string, endDate: string) => {
         setStartDate(startDate);
         setEndDate(endDate);
-    }, []);
+    };
 
     const handleZoomChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const zoom = parseInt(event.target.value, 10);
@@ -193,7 +193,14 @@ const SidePanel: React.FC = () => {
     };
 
     const handleDataTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        setDataValue(event.target.value); // Access the value of the selected option
+        if(event.target.value === "undefined")
+            {
+                console.log("its undefined");
+            }
+            else
+            {
+                setDataValue(event.target.value); // Access the value of the selected option
+            }
     };
 
     const handleFilterSym = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -203,7 +210,7 @@ const SidePanel: React.FC = () => {
         newSelectedSites: Set<string>,
         type: string,
     ) => {
-        setSelectedSites(newSelectedSites);
+        setTempSites(new Set(newSelectedSites));
     };
 
     const drawAction = () => {
@@ -273,7 +280,6 @@ const SidePanel: React.FC = () => {
     };
 
     const handleFilterValue = (event: ChangeEvent<HTMLInputElement>) => {
-
         const value = event.target.value;
         // Regex pattern to match float values
         const floatPattern = /^-?\d*(\.\d*)?$/;
@@ -289,7 +295,6 @@ const SidePanel: React.FC = () => {
                 new L.LatLng(maxLat || 0, maxLng || 0),
             );
             rectangle.setBounds(bounds);
-            //map.fitBounds(bounds);
         }
     };
 
@@ -308,20 +313,29 @@ const SidePanel: React.FC = () => {
         setRectangleDrawn(false);
     };
 
+    const handleSelectionDone = () => {
+        if(tempSites !== selectedSites)
+            
+            {
+            
+                console.log("UNIQUE RUN!!")
+                setSelectedSites(tempSites);
+            }
+            
+
+
+            handleToggleModal();
+            
+
+    };
+
+
     const siteOptions: SiteSelect[] = sites.map((site) => ({
         name: site.name,
         span_date: site.span_date
             ? [site.span_date[0], site.span_date[1]]
             : ["", ""],
     }));
-
-    //useEffect(() => {
-    //  console.log("Selected Sites Updated:", selectedSites);
-    //}, [selectedSites]);
-
-    //TODO: Refresh map redering and selected site list upon chnging of these values 
-    //useEffect(() => {
-    //}, [startDate, endDate, minLat]);
 
     return (
         <>
@@ -448,17 +462,17 @@ const SidePanel: React.FC = () => {
         onClick={handleToggleDownloadModal}
         className="w-100"
         >Download</Button>
-        
+
         {/*
-        <hr className={styles.separator} />
-        <Button
-        variant="danger"
-        onClick={() => window.location.href = 'mailto:terrell.credle@nasa.gov?cc=pawan.gupta@nasa.gov&subject=' + encodeURIComponent('[BUG REPORT] MAN VISUALIZATION TOOL') + '&body=' + encodeURIComponent('If applicable, please attach screenshots and explain the issue you are experiencing.')}
-        className="w-100 btn-sm"
-        >
-        Report an issue 
-        </Button>
-        */}
+            <hr className={styles.separator} />
+            <Button
+            variant="danger"
+            onClick={() => window.location.href = 'mailto:terrell.credle@nasa.gov?cc=pawan.gupta@nasa.gov&subject=' + encodeURIComponent('[BUG REPORT] MAN VISUALIZATION TOOL') + '&body=' + encodeURIComponent('If applicable, please attach screenshots and explain the issue you are experiencing.')}
+            className="w-100 btn-sm"
+            >
+            Report an issue 
+            </Button>
+            */}
         </div>
         </Card.Body>
         </Card>
@@ -546,7 +560,7 @@ const SidePanel: React.FC = () => {
         minLng={minLng}
         maxLat={maxLat}
         maxLng={maxLng}
-        type={dataValue} // TODO: Change this to be dynamically assigned by Configuration Modal
+        type={dataValue} 
         traceActive={traceActive}
         selectedSites={selectedSites}
         setTraceActive={setTraceActive}
@@ -561,7 +575,7 @@ const SidePanel: React.FC = () => {
         </SiteManager>
         </Modal.Body>
         <Modal.Footer>
-        <Button variant="secondary" onClick={handleToggleModal}>
+        <Button variant="secondary" onClick={handleSelectionDone}>
         Done
         </Button>
         </Modal.Footer>

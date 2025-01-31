@@ -35,7 +35,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
     const savedEndDate = localStorage.getItem("endDate") || today;
     setStartDate(savedStartDate);
     setEndDate(savedEndDate);
-  }, [minStartDate, today]);
+  }, []);
 
   // Sync selectedSites with props
   useEffect(() => {
@@ -62,6 +62,8 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
     localStorage.setItem("startDate", startDate);
     localStorage.setItem("endDate", endDate);
   }, [startDate, endDate]);
+
+
 
   // remove the dates from localStorage
   const clearDates = () => {

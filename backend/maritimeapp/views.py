@@ -14,6 +14,15 @@ and  this list is used to processes the files to filter by date and bounds.
 The processed files are then zipped and sent to the user as a stream to be downloaded.
 """
 
+
+from django.http import JsonResponse
+from django.middleware.csrf import get_token
+
+def set_csrf_token(request):
+    response = JsonResponse({'detail': 'CSRF cookie set'})
+    response['X-CSRFToken'] = get_token(request)
+    return response
+
 import os
 import shutil
 import subprocess
@@ -452,26 +461,32 @@ def get_display_info(request):
     return JsonResponse({"opts": returned})
 
 
-from django.contrib.gis.geos import Polygon
-from django.contrib.gis.geos.point import Point
+
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from django.utils.dateparse import parse_date
-from django.views.decorators.http import require_GET
-
+from django.contrib.gis.geos import Polygon, Point
 from .models import Site, SiteMeasurementsDaily15
+import json
 
-
-@require_GET
+@csrf_protect
+@require_POST
 def site_measurements(request):
-    aod_key = request.GET.get("reading")
-    min_lat = request.GET.get("min_lat")
-    min_lng = request.GET.get("min_lng")
-    max_lat = request.GET.get("max_lat")
-    max_lng = request.GET.get("max_lng")
-    start_date_str = request.GET.get("start_date")
-    end_date_str = request.GET.get("end_date")
-    selected_sites = request.GET.get("sites", "")
-    site_names = selected_sites.split(",") if selected_sites else []
+    try:
+        data = json.loads(request.body) 
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    aod_key = data.get("reading")
+    min_lat = data.get("min_lat")
+    min_lng = data.get("min_lng")
+    max_lat = data.get("max_lat")
+    max_lng = data.get("max_lng")
+    start_date_str = data.get("start_date")
+    end_date_str = data.get("end_date")
+    selected_sites = data.get("sites", [])
+    site_names = selected_sites if selected_sites else []
 
     if len(site_names) == 0:
         return JsonResponse({"error": "No sites selected"}, status=400)
@@ -480,7 +495,6 @@ def site_measurements(request):
         Site.objects.filter(name__in=site_names) if site_names else Site.objects.all()
     )
 
-    # TODO: Dynmaic model selection based on provided key - to be implemented later
     queryset = SiteMeasurementsDaily15.objects.filter(site__in=sites)
 
     if min_lat and min_lng and max_lat and max_lng:
@@ -500,24 +514,19 @@ def site_measurements(request):
         end_date = parse_date(end_date_str)
         queryset = queryset.filter(date__lte=end_date)
 
-    # Convert queryset to a list of dictionaries and handle latlng serialization
     measurements = list(
         queryset.exclude(**{aod_key: -999}).values(
             "site", "filename", "date", "time", "latlng", "aeronet_number", aod_key
         )
     )
 
-    # Convert latlng (Point) to a serializable format
     for measurement in measurements:
         latlng = measurement.get("latlng")
         if isinstance(latlng, Point):
             measurement["latlng"] = {"lng": latlng.x, "lat": latlng.y}
         else:
-            measurement["latlng"] = (
-                None  # Handle cases where latlng is None or not a Point
-            )
+            measurement["latlng"] = None
 
-        # Rename the dynamic key to "value"
         measurement["value"] = measurement.pop(aod_key)
 
     return JsonResponse(measurements, safe=False)

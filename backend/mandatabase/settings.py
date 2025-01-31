@@ -46,7 +46,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY'),
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False 
+DEBUG = True  
 
 # local
 ALLOWED_HOSTS = ["*"]
@@ -83,7 +83,6 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -108,28 +107,29 @@ CORS_ALLOW_HEADERS = [
 
 ]
 
+CSRF_COOKIE_NAME = 'X-CSRFToken'
 CSRF_TRUSTED_ORIGINS = [
+        'http://localhost:3000',    
     f'http://{db_host}:3000',
-]
-
-# CSRF_COOKIE_SECURE = False
+    'http://localhost',
+    'https://*.nasa.gov'
+    ]
+CSRF_COOKIE_HTTPONLY = False 
+CSRF_COOKIE_SECURE = False
 # CSRF_COOKIE_SAMESITE = 'None'
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ORIGIN_ALLOW_ALL = True
+# CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
-
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:63343",
-#     "http://127.0.0.1:63343",
-# ]
-
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # Add your frontend URL here
+]
 # ALLOWED_HOSTS = [
 #     '127.0.0.1'
 #     'localhost',
 #     'localhost:63343',
 # ]
 
-CORS_ALLOW_METHODS = ["GET"]
+CORS_ALLOW_METHODS = ["GET", "POST"]
 
 CORS_ALLOW_HEADERS = [
     'Content-Type',
@@ -137,7 +137,6 @@ CORS_ALLOW_HEADERS = [
 ]
 
 ROOT_URLCONF = "mandatabase.urls"
-
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
