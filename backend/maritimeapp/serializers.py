@@ -1,12 +1,14 @@
-from rest_framework import serializers
-from .models import Site, SiteMeasurementsDaily15, SiteMeasurementsDaily20
 import math
+
+from rest_framework import serializers
+
+from .models import Site, SiteMeasurementsDaily15, SiteMeasurementsDaily20
 
 
 class SiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Site
-        fields = ['name', 'description']
+        fields = ["name", "description"]
 
 
 class CustomFloatField(serializers.FloatField):
@@ -21,11 +23,13 @@ class SiteMeasurementsDaily15Serializer(serializers.ModelSerializer):
 
     class Meta:
         model = SiteMeasurementsDaily15
-        fields = '__all__'
+        fields = "__all__"
 
     def create(self, validated_data):
-        site_data = validated_data.pop('site')
-        site, _ = Site.objects.get_or_create(name=site_data['name'], defaults={'description': site_data['description']})
+        site_data = validated_data.pop("site")
+        site, _ = Site.objects.get_or_create(
+            name=site_data["name"], defaults={"description": site_data["description"]}
+        )
         return SiteMeasurementsDaily15.objects.create(site=site, **validated_data)
 
 
@@ -34,11 +38,11 @@ class SiteMeasurementsDaily20Serializer(serializers.ModelSerializer):
 
     class Meta:
         model = SiteMeasurementsDaily20
-        fields = '__all__'
+        fields = "__all__"
 
     def create(self, validated_data):
-        site_data = validated_data.pop('site')
-        site, _ = Site.objects.get_or_create(name=site_data['name'], defaults={'description': site_data['description']})
+        site_data = validated_data.pop("site")
+        site, _ = Site.objects.get_or_create(
+            name=site_data["name"], defaults={"description": site_data["description"]}
+        )
         return SiteMeasurementsDaily20.objects.create(site=site, **validated_data)
-
-

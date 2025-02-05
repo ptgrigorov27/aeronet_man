@@ -16,7 +16,7 @@ const ColorLegend: React.FC<ColorLegendProps> = ({type, activateTrace}) => {
 
 
   useEffect(() => {
-      console.log("colorLegend: "+ activateTrace)
+      //console.log("colorLegend: "+ activateTrace)
     setTraceActive(activateTrace ? true : false);
   }, [activateTrace]);
 
@@ -66,8 +66,8 @@ if (type.includes("std") || type.includes("aod")) {
         textAlign: 'center',
       }}
     >
-      <Typography variant="body1" sx={{ fontWeight: 'bold', marginBottom: '8px' }}>
-        Data Preview: {type}
+      <Typography variant="body1" sx={{ marginBottom: '8px' }}>
+        Data Preview: <strong>{type.toUpperCase().replace(/_/g, ' ')}</strong>
       </Typography>
       
       <OverlayTrigger

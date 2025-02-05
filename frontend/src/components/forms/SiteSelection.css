@@ -80,14 +80,35 @@ label {
   border-radius: 4px;
   cursor: pointer;
 }
-
+.date-range-container .MuiTextField-root {
+  width: 100%;
+}
 .date-range-container {
   display: flex;
-  flex-direction: row;
+  gap: 16px;
+  margin: 16px 0;
+  width: 100%;
 }
 
 .clear-date-btn {
   margin-top: 10px;
   flex-direction: column;
   width: 100%;
+}
+
+.date-picker-wrapper {
+  flex: 1;
+}
+
+.date-picker-wrapper label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.rdp {
+  --rdp-cell-size: 32px;
+  --rdp-accent-color: #0366d6;
+  --rdp-background-color: #e2e8f0;
+  margin: 0;
 }

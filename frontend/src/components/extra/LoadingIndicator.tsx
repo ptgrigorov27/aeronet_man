@@ -1,14 +1,14 @@
 import React from "react";
-import "./LoadingIndicator.css"; 
+import "./LoadingIndicator.css";
 
 const LoadingIndicator: React.FC = () => {
   return (
     <div className="loading-overlay">
       <div className="loading-spinner"></div>
       <div className="loading-text">
-        Processing your custom maritime aerosol dataset request.
+        Please wait...
         <br />
-        Please Wait...
+        Your requested MAN dataset is processing - download will begin shortly.
       </div>
     </div>
   );

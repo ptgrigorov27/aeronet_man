@@ -13,6 +13,7 @@ interface SiteSelectionFormProps {
   onSelectionChange: (selectedSites: Set<string>, type: string) => void;
   onDateChange: (startDate: string, endDate: string) => void;
   bounds?: [number, number, number, number];
+  isModalShown: boolean;
 }
 
 const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
@@ -21,6 +22,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
   onSelectionChange,
   onDateChange,
   bounds,
+  isModalShown,
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
@@ -29,22 +31,35 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
 
   const minStartDate = "2004-10-16";
   const today = new Date().toISOString().split("T")[0];
-  // storing state with default values to localStorage
-  useEffect(() => {
-    const savedStartDate = localStorage.getItem("startDate") || minStartDate;
-    const savedEndDate = localStorage.getItem("endDate") || today;
-    setStartDate(savedStartDate);
-    setEndDate(savedEndDate);
-  }, [minStartDate, today]);
 
-  // Sync selectedSites with props
   useEffect(() => {
-    setSelectedSites(new Set(parentSelectedSites));
-  }, [parentSelectedSites]);
+    if (parentSelectedSites) {
+      const newSelectedSites = new Set(parentSelectedSites);
+      setSelectedSites(newSelectedSites);
+    }
+  }, [JSON.stringify(Array.from(parentSelectedSites || new Set()))]); // Fix dependency tracking
+
+  // FIXES SITES NOT BEING DISPLAYED --- REFRESHES SELECTION WHENEVER CRUISE SELECTION IS CLICKED
+  useEffect(() => {
+    if (isModalShown) {
+      //set sites selection from previous session
+      const updatedSelection = new Set(parentSelectedSites);
+      onSelectionChange(updatedSelection, "add");
+
+      //set date from previous options
+      const savedStartDate = localStorage.getItem("startDate");
+      const savedEndDate = localStorage.getItem("endDate");
+
+      console.log("Start date end date");
+      if (savedStartDate && savedEndDate) {
+        setStartDate(savedStartDate);
+        setEndDate(savedEndDate);
+      }
+    }
+  }, [isModalShown]);
 
   useEffect(() => {
     if (sites.length === 0) return;
-    // convert the sites array to a Set of site names
     const sitesSet = new Set(sites.map((site) => site.name));
 
     // Set of selected sites that are in the sitesSet
@@ -73,6 +88,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
   };
 
   // store selected sites to localStorage
+  // TODO: Future - display previous set to user on load
   const saveData = () => {
     localStorage.setItem("Data", JSON.stringify(Array.from(selectedSites)));
   };
@@ -126,7 +142,6 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
 
     setSelectedSites(updatedSelection);
     onSelectionChange(updatedSelection, type);
-    saveData();
   };
 
   // Handle select all given a filtered or non filtered set of sites
@@ -187,7 +202,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
         <input
           type="date"
           //placeholder="Start Date"
-          value={startDate || ''}
+          value={startDate || ""}
           onChange={handleStartDateChange}
           min={minStartDate}
           max={today}
@@ -195,7 +210,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
         <input
           type="date"
           //placeholder="End Date"
-          value={endDate || ''}
+          value={endDate || ""}
           onChange={handleEndDateChange}
           min={startDate}
           max={today}
@@ -226,7 +241,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
         </div>
       </div>
       <p className="text-center">
-      Cruises available for selection: {filteredSites.length}
+        Cruises available for selection: {filteredSites.length}
       </p>
       {filteredSites.length > 0 ? (
         <List
