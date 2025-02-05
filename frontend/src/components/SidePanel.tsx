@@ -85,10 +85,7 @@ const SidePanel: React.FC = () => {
   }, [selectedSites, dataValue, maxLng]);
 
   useEffect(() => {
-    //setZoomLevel(zoomLevel);
-    setMarkerSize((zoomLevel + 2) * (Math.E - 1) * (.6) );
-      updateMarkerSize();
-
+    setMarkerSize((zoomLevel + 2) * (Math.E - 1));
   }, [zoomLevel]);
 
   useEffect(() => {
@@ -137,7 +134,7 @@ const SidePanel: React.FC = () => {
     }, 100);
   };
 
-const updateMarkerSize = () => {
+  const updateMarkerSize = () => {
     setRefreshMarkerSize(true);
     setTimeout(() => {
       setRefreshMarkerSize(false);
@@ -178,7 +175,6 @@ const updateMarkerSize = () => {
       frequency: Array.from(selectedFrequency),
       quality: Array.from(selectedQuality),
     };
-
 
     setShowLoading(true); // Show the download processing indicator
 
@@ -225,10 +221,9 @@ const updateMarkerSize = () => {
     /********************/
   }
   const handleDone = () => {
-    console.log("ON SAVE DATE: ", startDate, endDate)
+    console.log("ON SAVE DATE: ", startDate, endDate);
     localStorage.setItem("startDate", startDate);
     localStorage.setItem("endDate", endDate);
-
 
     setSelectedSites(tempSelectedSites);
     setShowModal(false);
@@ -264,13 +259,12 @@ const updateMarkerSize = () => {
   const handleDataTypeChange = (
     event: React.ChangeEvent<HTMLSelectElement>,
   ) => {
-    setDataValue(event.target.value); 
+    setDataValue(event.target.value);
   };
 
   const handleFilterSym = (event: ChangeEvent<HTMLSelectElement>) => {
-    setFilterSym(event.target.value); 
+    setFilterSym(event.target.value);
   };
-
 
   const handleSelectionChangeTemp = (
     newSelectedSites: Set<string>,
@@ -434,6 +428,28 @@ const updateMarkerSize = () => {
   return (
     <>
       <ColorLegend type={dataValue} activateTrace={traceActive} />
+      {traceActive && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "50px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "#FFFFFFAF",
+            padding: "0.5rem 1rem",
+            borderRadius: "5px",
+            color: "#000",
+            zIndex: 9999,
+            width: "auto",
+            textAlign: "center",
+            pointerEvents: "none",
+            border: "2px solid rgba(255, 255, 255, 0.5)",
+          }}
+        >
+          Double click a visible marker <br /> to exit isolated path mode.
+        </div>
+      )}
+      ;
       <Card className={styles.sidePanel}>
         <Card.Body>
           <Card.Title>Map Controls</Card.Title>
@@ -459,6 +475,7 @@ const updateMarkerSize = () => {
             <div className={styles.buttonContainer}>
               <SiteManager
                 startDate={startDate}
+                markerSize={markerSize}
                 endDate={endDate}
                 minLat={minLat}
                 minLng={minLng}
@@ -571,7 +588,6 @@ const updateMarkerSize = () => {
           </div>
         </Card.Body>
       </Card>
-
       {/* Download Modal */}
       <Modal
         show={showDownloadModal}
@@ -641,9 +657,7 @@ const updateMarkerSize = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
       {/* Cruise Selection Modal*/}
-
       <Modal show={showModal} onHide={() => setShowModal(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>Cruise Selection</Modal.Title>
@@ -656,6 +670,7 @@ const updateMarkerSize = () => {
             minLng={minLng}
             maxLat={maxLat}
             maxLng={maxLng}
+            markerSize={markerSize}
             refreshMarkerSize={refreshMarkerSize}
             refreshMarkers={refreshMarkers}
             zoom={zoomLevel}
@@ -686,7 +701,6 @@ const updateMarkerSize = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
       <Modal show={showDataModal} onHide={handleToggleDataModal} centered>
         <Modal.Header closeButton>
           <Modal.Title>Data Display</Modal.Title>
@@ -699,7 +713,6 @@ const updateMarkerSize = () => {
               alignItems: "center",
             }}
           >
-         
             <Card.Header style={{ fontWeight: "bold" }}>DATA TYPE</Card.Header>
             <Form.Select
               style={{ width: "75%" }}
@@ -726,7 +739,7 @@ const updateMarkerSize = () => {
               alignItems: "right",
             }}
           >
-          {/* 
+            {/* 
           <Card.Header style={{ fontWeight: "bold" }}>
               VALUE FILTER
             </Card.Header>
@@ -763,7 +776,6 @@ const updateMarkerSize = () => {
             Done
           </Button>
         </Modal.Footer>
-
       </Modal>
     </>
   );

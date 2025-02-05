@@ -6,7 +6,7 @@ How file download works:
 
 Source file contains all data files in a directory structure.
 
-The user selects sites, start date, end date, retrievals, frequency, quality, and bounding box coordinates. 
+The user selects sites, start date, end date, retrievals, frequency, quality, and bounding box coordinates.
 
 The backend filters the files based on the user's selection - a list of files names are generated based on parameters
 and  this list is used to processes the files to filter by date and bounds.
@@ -47,9 +47,9 @@ def process_file(file_path, start_date, end_date, bounds):
 
         f.close()
         # Row 5 is the header and the data starts from row 6
-        df = pd.read_csv(file_path, skiprows=4, encoding="latin-1")  # Skip first 4 line
+        df = pd.read_csv(file_path, skiprows=4, encoding="latin-1")
         print(f"reading file {file_path}")
-        date_format = "%d:%m:%Y"  # Key Date(dd:mm:yyyy)
+        date_format = "%d:%m:%Y"
 
         # Convert 'Date(dd:mm:yyyy)' column to datetime format from front end
         df["Date(dd:mm:yyyy)"] = pd.to_datetime(
@@ -146,7 +146,6 @@ def download_data(request):
     print(f"{start_date}\n")
 
     if (start_date is not None) or (end_date is not None):
-        # Define the specific date to compare with
         init_start_date = datetime(2004, 10, 16).strftime("%Y-%m-%d")
         today_date = datetime.now().date().strftime("%Y-%m-%d")
 
@@ -449,7 +448,6 @@ def list_sites(request):
                 Q(span_date__0__lte=end_date, span_date__1__gte=end_date)
             ).distinct()
 
-    # Sorting based on start_date within span_date
     queryset = queryset.annotate(start_date=F("span_date__0")).order_by("start_date")
 
     sites = queryset.values("name", "span_date")
@@ -525,9 +523,12 @@ def site_measurements(request):
         queryset = queryset.filter(date__lte=end_date)
 
     measurements = list(
-        queryset.exclude(**{aod_key: -999}).values(
+        queryset.values(
             "site", "filename", "date", "time", "latlng", "aeronet_number", aod_key
         )
+        # queryset.exclude(**{aod_key: -999}).values(
+        #     "site", "filename", "date", "time", "latlng", "aeronet_number", aod_key
+        # )
     )
 
     for measurement in measurements:

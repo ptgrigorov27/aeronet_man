@@ -44,6 +44,7 @@ interface SiteManagerProps {
   refreshMarkers: boolean;
   refreshMarkerSize: boolean;
   typeChanged: boolean;
+  markerSize: number;
   children: ReactElement<SiteManagerChildProps>;
   setTraceActive: (active: boolean) => void;
 }
@@ -68,6 +69,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
   zoom,
   traceActive,
   setTraceActive,
+  markerSize,
   refreshMarkerSize,
   refreshMarkers,
   selectedSites,
@@ -83,7 +85,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
   const [value, setValue] = useState<string>(type);
   const [colors, setColors] = useState<string[]>([]);
   const [colorDomain, setColorDomain] = useState<number[]>([]);
-  const [markerSize, setMarkerSize] = useState<number>(4);
   const [maxValue, setMaxValue] = useState<number>();
   const prevZoom = usePrevious(zoom);
   const prevSitesSelected = usePrevious(selectedSites);
@@ -111,8 +112,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
 
   useEffect(() => {
     if (zoom) {
-      setMarkerSize((zoom + 2) * (Math.E - 1) * (.6));
-      updateMarkerSize();
+      updateMarkerSize(markerSize);
     }
   }, [zoom, map]);
 
@@ -128,7 +128,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       fetchMarkers();
     }
   }, [refreshMarkers]);
-
 
   useEffect(() => {
     let refresh = false;
@@ -182,7 +181,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     setColors(color);
     setColorDomain(domain);
     setMaxValue(domain[domain.length - 1]);
-
   };
 
   const clearMarkers = () => {
@@ -204,7 +202,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         .scaleLinear<string>()
         .domain(colorDomain)
         .range(colors);
-      if (value <= maxValue) {
+      if (value <= maxValue && value > 0) {
         return colorScale(value); // sets weight of color based on scale
       } else if (value > maxValue) {
         return d3.color("darkred");
@@ -270,11 +268,14 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         }
 
         const markerColor = setColor(value);
+        const fillOpacity =
+          markerColor && markerColor === d3.color("grey") ? 0.6 : 0.9;
         const cruiseMarker = L.circleMarker([latlng.lat, latlng.lng], {
           color: markerColor,
           radius: markerSize,
-          fillOpacity: 0.9,
+          fillOpacity: fillOpacity,
           stroke: false,
+          setFillOpacity: fillOpacity,
           interactive: true,
           value: value,
           site: site,
@@ -308,7 +309,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           cruiseMarker
             .bindPopup(
               `<b>Cruise:</b> ${cruiseMarker.options.site}<br>
-                             <b>${type}:</b> ${cruiseMarker.options.value.toFixed(3)}<br>
+                             <b>${type.toUpperCase().replace(/_/g, " ")}</b> ${cruiseMarker.options.value.toFixed(4)}<br>
                              <b>Date:</b> ${cruiseMarker.options.date}`,
             )
             .openPopup();
@@ -327,12 +328,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     setTraceActive(active);
   };
 
-  const updateMarkerSize = () => {
+  const updateMarkerSize = (size: number) => {
     if (map) {
       map.eachLayer((layer: L.Layer) => {
         if (layer instanceof L.CircleMarker) {
           layer.setStyle({
-            radius: markerSize,
+            radius: size,
           });
         }
       });
@@ -356,7 +357,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
             layer
               .bindPopup(
                 `<b>Cruise:</b> ${layer.options.site}<br>
-                            <b>${type}:</b> ${layer.options.value.toFixed(3)}<br>
+                            <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}<br>
                             <b>Date:</b> ${layer.options.date}`,
               )
               .openPopup();
@@ -367,10 +368,10 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           });
         } else {
           layer.setStyle({
-            fillOpacity: 0.3,
+            fillOpacity: 0.0,
             color: "grey",
             weight: 2,
-            opacity: 0.3,
+            opacity: 0,
             interactive: false,
           });
           layer.off("mouseover");
@@ -396,7 +397,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       delete sitePolylineGroups[site]; // makes sure reference is also deleted
     }
 
-    // Get markers for the selected site and sort them by date (newest to oldest)
     const siteMarkers = markers
       .filter((marker) => marker.site === site)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -440,9 +440,8 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       if (layer instanceof L.CircleMarker) {
         layer.setStyle({
           color: layer.options.originalColor,
-          fillOpacity: 0.9,
+          fillOpacity: layer.options.setFillOpacity,
           weight: 2,
-          opacity: 1,
           interactive: true,
         });
 
@@ -450,7 +449,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           layer
             .bindPopup(
               `<b>Cruise:</b> ${layer.options.site}<br>
-                        <b>${type}:</b> ${layer.options.value.toFixed(3)}<br>
+                        <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}<br>
                         <b>Date:</b> ${layer.options.date}`,
             )
             .openPopup();

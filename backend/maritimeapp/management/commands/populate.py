@@ -1,16 +1,17 @@
 import concurrent.futures
+import io
 import logging
 import os
-import io
-import numpy as np
 import tarfile
-import requests
-from django.core.management.base import BaseCommand
-from rest_framework.exceptions import ValidationError
-from maritimeapp.models import *
-from django.contrib.gis.geos import Point
+
+import numpy as np
 import pandas as pd
-from django.db.models import Min, Max
+import requests
+from django.contrib.gis.geos import Point
+from django.core.management.base import BaseCommand
+from django.db.models import Max, Min
+from maritimeapp.models import *
+from rest_framework.exceptions import ValidationError
 
 NUM_WORKERS = 5
 
@@ -26,6 +27,7 @@ format_two = [
     "series.lev20",
 ]
 
+
 class Command(BaseCommand):
     help = "Download and process file from static URL"
 
@@ -37,7 +39,7 @@ class Command(BaseCommand):
             format_two[1]: SiteMeasurementsDaily20,
         }
         model = model_classes.get(filetype)
-        
+
         daily_header = [
             "Date(dd:mm:yyyy)",
             "Time(hh:mm:ss)",
@@ -81,51 +83,55 @@ class Command(BaseCommand):
                 date = f"{date_str[2]}-{date_str[1]}-{date_str[0]}"
 
                 last_processing = row["Last_Processing_Date(dd:mm:yyyy)"].split(":")
-                last_processing_date = f"{last_processing[2]}-{last_processing[1]}-{last_processing[0]}"
+                last_processing_date = (
+                    f"{last_processing[2]}-{last_processing[1]}-{last_processing[0]}"
+                )
 
                 # Create or get the Site object
                 site_obj, created = Site.objects.get_or_create(
                     name=site_name,
-                            defaults={"description": "", "span_date": [], "aeronet_number": row["AERONET_Number"]}
+                    defaults={
+                        "description": "",
+                        "span_date": [],
+                        "aeronet_number": row["AERONET_Number"],
+                    },
                 )
-            
+
                 model.objects.get_or_create(
-                site=site_obj,  
-                filename=full_file_name,
-                date=date,
-                time=row["Time(hh:mm:ss)"],
-                air_mass=float(row["Air Mass"]),
-                latlng=latlng,
-                aod_340nm=float(row["AOD_340nm"]),
-                aod_380nm=float(row["AOD_380nm"]),
-                aod_440nm=float(row["AOD_440nm"]),
-                aod_500nm=float(row["AOD_500nm"]),
-                aod_675nm=float(row["AOD_675nm"]),
-                aod_870nm=float(row["AOD_870nm"]),
-                aod_1020nm=float(row["AOD_1020nm"]),
-                aod_1640nm=float(row["AOD_1640nm"]),
-                water_vapor=float(row["Water Vapor(cm)"]),
-                angstrom_exponent_440_870=float(
-                    row["440-870nm_Angstrom_Exponent"]
-                ),
-                std_340nm=float(row["STD_340nm"]),
-                std_380nm=float(row["STD_380nm"]),
-                std_440nm=float(row["STD_440nm"]),
-                std_500nm=float(row["STD_500nm"]),
-                std_675nm=float(row["STD_675nm"]),
-                std_870nm=float(row["STD_870nm"]),
-                std_1020nm=float(row["STD_1020nm"]),
-                std_1640nm=float(row["STD_1640nm"]),
-                std_water_vapor=float(row["STD_Water_Vapor(cm)"]),
-                std_angstrom_exponent_440_870=float(
-                    row["STD_440-870nm_Angstrom_Exponent"]
-                ),
-                num_observations=int(row["Number_of_Observations"]),
-                last_processing_date=last_processing_date,
-                aeronet_number=int(row["AERONET_Number"]),
-                microtops_number=int(row["Microtops_Number"]),
+                    site=site_obj,
+                    filename=full_file_name,
+                    date=date,
+                    time=row["Time(hh:mm:ss)"],
+                    air_mass=float(row["Air Mass"]),
+                    latlng=latlng,
+                    aod_340nm=float(row["AOD_340nm"]),
+                    aod_380nm=float(row["AOD_380nm"]),
+                    aod_440nm=float(row["AOD_440nm"]),
+                    aod_500nm=float(row["AOD_500nm"]),
+                    aod_675nm=float(row["AOD_675nm"]),
+                    aod_870nm=float(row["AOD_870nm"]),
+                    aod_1020nm=float(row["AOD_1020nm"]),
+                    aod_1640nm=float(row["AOD_1640nm"]),
+                    water_vapor=float(row["Water Vapor(cm)"]),
+                    angstrom_exponent_440_870=float(row["440-870nm_Angstrom_Exponent"]),
+                    std_340nm=float(row["STD_340nm"]),
+                    std_380nm=float(row["STD_380nm"]),
+                    std_440nm=float(row["STD_440nm"]),
+                    std_500nm=float(row["STD_500nm"]),
+                    std_675nm=float(row["STD_675nm"]),
+                    std_870nm=float(row["STD_870nm"]),
+                    std_1020nm=float(row["STD_1020nm"]),
+                    std_1640nm=float(row["STD_1640nm"]),
+                    std_water_vapor=float(row["STD_Water_Vapor(cm)"]),
+                    std_angstrom_exponent_440_870=float(
+                        row["STD_440-870nm_Angstrom_Exponent"]
+                    ),
+                    num_observations=int(row["Number_of_Observations"]),
+                    last_processing_date=last_processing_date,
+                    aeronet_number=int(row["AERONET_Number"]),
+                    microtops_number=int(row["Microtops_Number"]),
                 )
-            
+
             # TODO: Log to file
             except Exception as e:
                 print(row)
@@ -173,16 +179,23 @@ class Command(BaseCommand):
             "series.lev20",
             "daily.lev15",
             "daily.lev20",
+            "all_points.ONEILL_10",
+            "all_points.ONEILL_15",
+            "all_points.ONEILL_20",
+            "series.ONEILL_15",
+            "series.ONEILL_20",
+            "daily.ONEILL_15",
+            "daily.ONEILL_20",
         ]
 
         # Download the MAN file from the static URL
         url = "https://aeronet.gsfc.nasa.gov/new_web/All_MAN_Data_V3.tar.gz"
         response = requests.get(url)
-        
+
         if not response.ok:
             print("Server Offline. Attempt again Later.")
             return
-        
+
         tar_contents = response.content
 
         with tarfile.open(fileobj=io.BytesIO(tar_contents), mode="r:gz") as tar:
@@ -227,4 +240,3 @@ class Command(BaseCommand):
                     future.result()
                 except Exception as exc:
                     print(f"Exception occurred: {exc}")
-
