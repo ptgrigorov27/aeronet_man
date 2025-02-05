@@ -198,12 +198,12 @@ const SiteManager: React.FC<SiteManagerProps> = ({
 
   const setColor = (value: number) => {
     if (colors.length && colorDomain.length && maxValue !== undefined) {
-      const colorScale = d3
+      let markerColorScale = d3
         .scaleLinear<string>()
         .domain(colorDomain)
         .range(colors);
-      if (value <= maxValue && value > 0) {
-        return colorScale(value); // sets weight of color based on scale
+      if (value <= maxValue && value >= 0) {
+        return markerColorScale(value); // sets weight of color based on scale
       } else if (value > maxValue) {
         return d3.color("darkred");
       } else {
