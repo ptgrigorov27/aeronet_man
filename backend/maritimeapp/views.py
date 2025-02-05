@@ -36,31 +36,24 @@ import pandas as pd
 from django.http import HttpResponse
 from django.views.decorators.http import require_GET
 
-# from tqdm import tqdm
-
 
 def process_file(file_path, start_date, end_date, bounds):
     try:
-        # First four lines contain disclaimers and metadata
         with open(file_path, "r", encoding="latin-1") as f:
             header_lines = [next(f) for _ in range(4)]
 
         f.close()
-        # Row 5 is the header and the data starts from row 6
         df = pd.read_csv(file_path, skiprows=4, encoding="latin-1")
         print(f"reading file {file_path}")
         date_format = "%d:%m:%Y"
 
-        # Convert 'Date(dd:mm:yyyy)' column to datetime format from front end
         df["Date(dd:mm:yyyy)"] = pd.to_datetime(
             df["Date(dd:mm:yyyy)"], format=date_format, errors="coerce"
         )
 
-        # Date rows that could not be parsed - TODO: Include in log file.
         if df["Date(dd:mm:yyyy)"].isna().any():
             print(f"Warning: Some dates in {file_path} could not be parsed")
 
-        # Convert to front end format for  filtering
         start_date = (
             pd.to_datetime(start_date, format="%Y-%m-%d", errors="coerce")
             if start_date
@@ -72,13 +65,11 @@ def process_file(file_path, start_date, end_date, bounds):
             else None
         )
 
-        # Filter by set date
         if start_date:
             df = df[df["Date(dd:mm:yyyy)"] >= start_date]
         if end_date:
             df = df[df["Date(dd:mm:yyyy)"] <= end_date]
 
-        # Filter by set boundaries
         if bounds["min_lat"]:
             df = df[df["Latitude"] >= float(bounds["min_lat"])]
         if bounds["max_lat"]:
@@ -93,10 +84,8 @@ def process_file(file_path, start_date, end_date, bounds):
         if df.empty:
             return
 
-        # Convert dates back to original format from file
         df["Date(dd:mm:yyyy)"] = df["Date(dd:mm:yyyy)"].dt.strftime(date_format)
 
-        # Overwrite the file with new filtered data
         with open(file_path, "w") as f:
             f.writelines(header_lines)
             # new filtered data
@@ -108,10 +97,18 @@ def process_file(file_path, start_date, end_date, bounds):
         print(f"Error processing file {file_path}: {e}")
 
 
+# ----- Download #TODO: Swap to database downlaod instead of file creation
 import json
+import os
+import shutil
+import subprocess
+import tempfile
+import time
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime
 
 from django.contrib.gis.geos import Point, Polygon
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
@@ -119,31 +116,150 @@ from django.views.decorators.http import require_POST
 from .models import Site, SiteMeasurementsDaily15
 
 
+def get_files_to_copy(sites, retrievals, frequency, quality, file_endings):
+    quality_map = {
+        "AOD": {
+            "Level 1.0": "lev10",
+            "Level 1.5": "lev15",
+            "Level 2.0": "lev20",
+        },
+        "SDA": {
+            "Level 1.0": "ONEILL_10",
+            "Level 1.5": "ONEILL_15",
+            "Level 2.0": "ONEILL_20",
+        },
+    }
+
+    files_to_copy = []
+    for retrieval in retrievals:
+        if retrieval not in quality_map:
+            print(f"Warning: Retrieval '{retrieval}' not in quality map")
+            continue
+
+        for site in sites:
+            for freq in frequency:
+                for q in quality:
+                    if freq == "Series":
+                        prefix = "series"
+                    elif freq == "Point":
+                        prefix = "all_points"
+                    elif freq == "Daily":
+                        prefix = "daily"
+                    else:
+                        continue
+
+                    file_ending = quality_map[retrieval].get(q)
+                    if file_ending:
+                        file_name = f"{site}_{prefix}.{file_ending}"
+                        file_ending_only = f"{prefix}.{file_ending}"
+
+                        if file_ending_only in file_endings:
+                            files_to_copy.append(file_name)
+
+    return files_to_copy
+
+
+def copy_files(src_dir, temp_dir, retrievals, files_to_copy):
+    complete_files = []
+    for retrieval in retrievals:
+        retrieval_dir = os.path.join(temp_dir, retrieval)
+        os.makedirs(retrieval_dir, exist_ok=True)
+
+        for file_name in files_to_copy:
+            src_file = os.path.join(src_dir, retrieval, file_name)
+            temp_file = os.path.join(retrieval_dir, file_name)
+
+            if os.path.isfile(src_file):
+                complete_files.append(src_file)
+            else:
+                print(f"Source file {src_file} does not exist")
+
+    print(f"copying files {complete_files}")
+
+    # Bulk copy all files to directory
+    subprocess.run(["cp", "-r"] + complete_files + [temp_dir])
+
+    if "AOD" in retrievals:
+        subprocess.run(
+            f"mv {temp_dir}/*.lev* {os.path.join(temp_dir, 'AOD')}",
+            check=True,
+            shell=True,
+        )
+    if "SDA" in retrievals:
+        subprocess.run(
+            f"mv {temp_dir}/*.ONEILL* {os.path.join(temp_dir, 'SDA')}",
+            check=True,
+            shell=True,
+        )
+
+    keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
+    for policy_file in keep_files:
+        src_policy_file = os.path.join(src_dir, policy_file)
+        temp_policy_file = os.path.join(temp_dir, policy_file)
+
+        os.makedirs(os.path.dirname(temp_policy_file), exist_ok=True)
+
+        if os.path.isfile(src_policy_file):
+            shutil.copy(src_policy_file, temp_policy_file)
+            print(f"Copied {src_policy_file} to {temp_policy_file}")
+        else:
+            print(f"Source policy file {src_policy_file} does not exist")
+
+
+def process_file(file_path, start_date, end_date, bounds):
+    pass
+
+
+def process_files(temp_dir, start_date, end_date, bounds, retrievals):
+    skip_files = {"data_usage_policy.pdf", "data_usage_policy.txt"}
+
+    files = []
+    for retrieval in retrievals:
+        subdir_path = os.path.join(temp_dir, retrieval)
+        print(f"Subdirectory path: {subdir_path}")
+
+        if os.path.isdir(subdir_path):
+            for file_name in os.listdir(subdir_path):
+                if file_name not in skip_files:
+                    files.append(os.path.join(subdir_path, file_name))
+        else:
+            print(f"Subdirectory {subdir_path} does not exist or is not a directory")
+
+    with ProcessPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for file_path in files:
+            futures.append(
+                executor.submit(process_file, file_path, start_date, end_date, bounds)
+            )
+
+        for future in futures:
+            future.result()
+
+
 @csrf_protect
 @require_POST
 def download_data(request):
-    # Variables for file generation
-    src_dir = r"./src"  # Path to the source directory
-    temp_base_dir = r"./temp"  # Path to the temporary directory
+    src_dir = r"./src"
+    temp_base_dir = r"./temp"
     unique_temp_folder = str(int(time.time())) + "_MAN_DATA"
-    keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
 
-    # Variables from the POST request (request.POST for form data, request.body for raw data)
-    sites = request.POST.getlist("sites[]")
-    start_date = request.POST.get("start_date", None)
-    end_date = request.POST.get("end_date", None)
-    retrievals = request.POST.getlist("retrievals[]")
-    frequency = request.POST.getlist("frequency[]")
-    quality = request.POST.getlist("quality[]")
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+
+    sites = data.get("sites", [])
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    retrievals = data.get("retrievals", [])
+    frequency = data.get("frequency", [])
+    quality = data.get("quality", [])
     bounds = {
-        "min_lat": request.POST.get("min_lat", None),
-        "min_lng": request.POST.get("min_lng", None),
-        "max_lat": request.POST.get("max_lat", None),
-        "max_lng": request.POST.get("max_lng", None),
+        "min_lat": data.get("min_lat", None),
+        "min_lng": data.get("min_lng", None),
+        "max_lat": data.get("max_lat", None),
+        "max_lng": data.get("max_lng", None),
     }
-
-    print(f"{datetime(2004,10,16).strftime('%Y-%m-%d')}\n")
-    print(f"{start_date}\n")
 
     if (start_date is not None) or (end_date is not None):
         init_start_date = datetime(2004, 10, 16).strftime("%Y-%m-%d")
@@ -156,19 +272,9 @@ def download_data(request):
             if end_date == today_date:
                 end_date = None
 
-    # DEBUG
-    # print("Sites:", sites)
-    # print("Start Date:", start_date)
-    # print("End Date:", end_date)
-    # print("Retrievals:", retrievals)
-    # print("Frequency:", frequency)
-    # print("Quality:", quality)
-
-    # Create the unique temp directory
     full_temp_path = os.path.join(temp_base_dir, unique_temp_folder)
     os.makedirs(full_temp_path, exist_ok=True)
 
-    # Define file endings and options
     file_endings = [
         "all_points.lev10",
         "all_points.lev15",
@@ -186,146 +292,6 @@ def download_data(request):
         "daily.ONEILL_20",
     ]
 
-    def get_files_to_copy(sites, retrievals, frequency, quality, file_endings):
-        quality_map = {
-            "AOD": {
-                "Level 1.0": "lev10",
-                "Level 1.5": "lev15",
-                "Level 2.0": "lev20",
-            },
-            "SDA": {
-                "Level 1.0": "ONEILL_10",
-                "Level 1.5": "ONEILL_15",
-                "Level 2.0": "ONEILL_20",
-            },
-        }
-
-        files_to_copy = []
-        for retrieval in retrievals:
-            # TODO: Log to log file
-            if retrieval not in quality_map:
-                print(f"Warning: Retrieval '{retrieval}' not in quality map")
-                continue
-
-            for site in sites:
-                for freq in frequency:
-                    for q in quality:
-                        if freq == "Series":
-                            prefix = "series"
-                        elif freq == "Point":
-                            prefix = "all_points"
-                        elif freq == "Daily":
-                            prefix = "daily"
-                        else:
-                            continue
-
-                        # Generate files to download based on the quality map
-                        file_ending = quality_map[retrieval].get(q)
-                        if file_ending:
-                            file_name = f"{site}_{prefix}.{file_ending}"
-                            file_ending_only = f"{prefix}.{file_ending}"
-
-                            if file_ending_only in file_endings:
-                                files_to_copy.append(file_name)
-                            else:
-                                pass
-
-        return files_to_copy
-
-    def copy_files(src_dir, temp_dir, retrievals, files_to_copy):
-        complete_files = []
-        for retrieval in retrievals:
-            retrieval_dir = os.path.join(temp_dir, retrieval)
-            os.makedirs(retrieval_dir, exist_ok=True)
-
-            for file_name in files_to_copy:
-                src_file = os.path.join(src_dir, retrieval, file_name)
-                temp_file = os.path.join(retrieval_dir, file_name)
-
-                if os.path.isfile(src_file):
-                    complete_files.append(src_file)
-                    # shutil.copy(src_file, temp_file)
-                    # # TODO: Log to log file
-                    # print(f"Copied {src_file} to {temp_file}")
-                else:
-                    # TODO: Log to log file
-                    pass
-                # print(f"Source file {src_file} does not exist")
-
-        print(f"copying files {complete_files}")
-
-        # -Bulk copy all files to directory.
-
-        subprocess.run(["cp", "-r"] + complete_files + [temp_dir])
-
-        if "AOD" in retrievals:
-            subprocess.run(
-                f"mv {temp_dir}/*.lev* {os.path.join(temp_dir, 'AOD')}",
-                check=True,
-                shell=True,
-            )
-        if "SDA" in retrievals:
-            subprocess.run(
-                f"mv {temp_dir}/*.ONEILL* {os.path.join(temp_dir, 'SDA')}",
-                check=True,
-                shell=True,
-            )
-
-        for policy_file in keep_files:
-            src_policy_file = os.path.join(src_dir, policy_file)
-            temp_policy_file = os.path.join(temp_dir, policy_file)
-
-            os.makedirs(os.path.dirname(temp_policy_file), exist_ok=True)
-
-            if os.path.isfile(src_policy_file):
-                shutil.copy(src_policy_file, temp_policy_file)
-
-                # TODO: Log to log file
-                print(f"Copied {src_policy_file} to {temp_policy_file}")
-            else:
-                # TODO: Log to log file
-                print(f"Source policy file {src_policy_file} does not exist")
-
-    def process_files(temp_dir, start_date, end_date, bounds, retrievals):
-        skip_files = {"data_usage_policy.pdf", "data_usage_policy.txt"}
-
-        files = []
-        for retrieval in retrievals:
-            subdir_path = os.path.join(temp_dir, retrieval)
-            print(f"Subdirectory path: {subdir_path}")
-
-            if os.path.isdir(subdir_path):
-                for file_name in os.listdir(subdir_path):
-                    if file_name not in skip_files:
-                        files.append(os.path.join(subdir_path, file_name))
-            else:
-                # TODO: Log to log file
-                print(
-                    f"Subdirectory {subdir_path} does not exist or is not a directory"
-                )
-
-        # Multiprocessing implementation
-        with ProcessPoolExecutor(max_workers=5) as executor:
-            futures = []
-            for file_path in files:
-                futures.append(
-                    executor.submit(
-                        process_file, file_path, start_date, end_date, bounds
-                    )
-                )
-
-            for future in futures:
-                future.result()
-
-    # def add_with_progress(tarf, folder):
-    #     items = [item for item in os.listdir(folder) if os.path.exists(os.path.join(folder, item))]
-    #
-    #     print(items)
-    #     with tqdm(total=len(items), unit='file') as pbar:
-    #         for file in items:
-    #             tarf.add(os.path.join(folder, file), arcname=file)
-    #             pbar.update(1)  # Update progress bar for each file added
-
     files_to_copy = get_files_to_copy(
         sites, retrievals, frequency, quality, file_endings
     )
@@ -337,37 +303,40 @@ def download_data(request):
     tar_filename = f"{unique_temp_folder}.tar.gz"
     tar_path = os.path.join(temp_base_dir, tar_filename)
     directory_to_archive = os.path.join(temp_base_dir, unique_temp_folder)
-
-    # Create a tar.gz file
     try:
-        subprocess.run(["tar", "-czvf", tar_path, directory_to_archive], check=True)
+        subprocess.run(
+            ["tar", "-czvf", tar_path, "-C", temp_base_dir, unique_temp_folder],
+            check=True,
+        )
         print(f"Successfully created {tar_filename} from {directory_to_archive}")
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while creating the tar file: {e}")
-        # for root, dirs, files in os.walk(full_temp_path):
-        #     for file in files:
-        #         file_path = os.path.join(root, file)
-        #         arcname = os.path.relpath(file_path, full_temp_path)
-        #         tarf.add(file_path, arcname=arcname)
-        #
-    response = HttpResponse(content_type="application/gzip")
-    response["Content-Disposition"] = f"attachment; filename={tar_filename}"
+        return JsonResponse(
+            {"error": "An error occurred while creating the tar file."}, status=500
+        )
 
-    with open(tar_path, "rb") as f:
-        response.write(f.read())
-
-    # Clean up temporary files
     try:
+        with open(tar_path, "rb") as f:
+            response = HttpResponse(
+                f.read(),
+                content_type="application/gzip",
+                headers={
+                    "Content-Disposition": f"attachment\; filename={tar_filename}"
+                },
+            )
+
+            return response
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    finally:
         if os.path.exists(full_temp_path):
             shutil.rmtree(full_temp_path)
             print(f"Deleted temporary directory {full_temp_path}")
         if os.path.exists(tar_path):
             os.remove(tar_path)
-            print(f"Deleted temporary files {full_temp_path} and {tar_path}")
-    except Exception as e:
-        print(f"Error cleaning up temporary files: {e}")
+            print(f"Deleted temporary file {tar_path}")
 
-    return response
+    return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
 from django.contrib.gis.geos import Point, Polygon

@@ -50,7 +50,8 @@ const SidePanel: React.FC = () => {
   const [filterValue, setFilterValue] = useState<string>("");
   const [filterSym, setFilterSym] = useState<string>("");
   const [fetchedSites, setFetchedSites] = useState<Set<string>>(new Set());
-
+  const [showNotification, setShowNotification] = useState<boolean>(false);
+  const [responseSucess, setResponseSuccess] = useState<boolean>(false);
   interface DisplayInfoResponse {
     opts: string[];
   }
@@ -103,6 +104,16 @@ const SidePanel: React.FC = () => {
   useEffect(() => {
     handleBoundaryChange();
   }, [minLat, minLng, maxLat, maxLng]);
+
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
   {
     /* handle download */
   }
@@ -176,11 +187,10 @@ const SidePanel: React.FC = () => {
       quality: Array.from(selectedQuality),
     };
 
+    console.log("DOWNLOAD -> selectedSites", selectedSites);
+
     setShowLoading(true); // Show the download processing indicator
-
     try {
-      // TODO: Fix the filename extraction
-
       const filteredParams = Object.fromEntries(
         Object.entries(params).filter(([_, v]) => v != null),
       );
@@ -195,27 +205,37 @@ const SidePanel: React.FC = () => {
         credentials: "include",
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+        setResponseSuccess(false);
+      }
+      setResponseSuccess(response.ok);
+      const disposition = response.headers.get("content-disposition");
       console.log(response);
-      //const disposition = response.headers["content-disposition"];
-      //const filenameMatch = disposition
-      //    ? disposition.match(/filename="(.+)"/)
-      //    : null;
-      //    const filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
-      //    const url = window.URL.createObjectURL(new Blob([response.data]));
+      const filenameMatch = disposition
+        ? disposition.match(/filename="?(.+)"?/)
+        : null;
+      const filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
 
-      //const link = document.createElement("a");
-      //link.href = url;
-      //link.setAttribute("download", filename);
-      //document.body.appendChild(link);
-      //link.click();
-      //window.URL.revokeObjectURL(url);
-      //document.body.removeChild(link);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
     } catch (error) {
       console.error("Error during download:", error);
     } finally {
-      setShowLoading(false); // Removing the download indicator
+      if (responseSucess) {
+        setShowNotification(true);
+      }
+      setShowLoading(false);
     }
-    setShowDownloadModal(false); // Close the download modal
+
+    setShowDownloadModal(false);
   };
   {
     /********************/
@@ -449,7 +469,29 @@ const SidePanel: React.FC = () => {
           Double click a visible marker <br /> to exit isolated path mode.
         </div>
       )}
-      ;
+      {showNotification && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "50px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "#0d6efdFF",
+            padding: "0.5rem 1rem",
+            borderRadius: "5px",
+            color: "white",
+            zIndex: 9999,
+            width: "auto",
+            textAlign: "center",
+            pointerEvents: "none",
+            border: "2px solid rgba(255, 255, 255, 0.5)",
+            transition: "opacity 0.5s ease-in-out",
+            opacity: showNotification ? 1 : 0,
+          }}
+        >
+          ⛵ Download started successfully!
+        </div>
+      )}
       <Card className={styles.sidePanel}>
         <Card.Body>
           <Card.Title>Map Controls</Card.Title>
