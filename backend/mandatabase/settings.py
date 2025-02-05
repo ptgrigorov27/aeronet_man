@@ -46,7 +46,7 @@ SECRET_KEY = (os.getenv("DJANGO_SECRET_KEY"),)
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 # local
 ALLOWED_HOSTS = ["*"]
@@ -109,24 +109,23 @@ CORS_ALLOW_HEADERS = [
 
 CSRF_COOKIE_NAME = "X-CSRFToken"
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
+    # "http://localhost:3000",
     f"http://{db_host}:3000",
-    "http://localhost",
+    # "http://localhost",
     "https://*.nasa.gov",
 ]
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = False
 # CSRF_COOKIE_SAMESITE = 'None'
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 # CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Add your frontend URL here
-]
+CORS_ALLOWED_ORIGINS = ["http://{db_host}:3000", "https://aeronet.gsfc.nasa.gov"]
 ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    "localhost:63343",
+    "aeronet.gsfc.nasa.gov"
+    # "127.0.0.1",
+    # "localhost",
+    # "localhost:63343",
 ]
 
 CORS_ALLOW_METHODS = ["GET", "POST"]
