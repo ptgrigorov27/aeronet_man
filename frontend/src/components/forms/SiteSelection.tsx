@@ -28,7 +28,7 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
-
+  const [firstRun, setFirstRun] = useState<boolean>(false);
   const minStartDate = "2004-10-16";
   const today = new Date().toISOString().split("T")[0];
 
@@ -49,8 +49,14 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
       //set date from previous options
       const savedStartDate = localStorage.getItem("startDate");
       const savedEndDate = localStorage.getItem("endDate");
+      if(!firstRun && (savedEndDate == "" || savedStartDate == "")) 
+      {
+        clearDates();
+        setFirstRun(true);
+      }
 
-      console.log("Start date end date");
+
+      console.log("Start date end date", savedStartDate, savedEndDate);
       if (savedStartDate && savedEndDate) {
         setStartDate(savedStartDate);
         setEndDate(savedEndDate);
