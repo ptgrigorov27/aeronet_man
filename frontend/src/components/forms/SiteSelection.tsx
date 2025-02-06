@@ -253,7 +253,10 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
           {Row}
         </List>
       ) : (
-        <div>No Results Found, try another cruise.</div>
+<div className="d-flex justify-content-center align-items-center" style={{  }}>
+      <div>No results found. Enter another cruise or try refreshing page.</div>
+    </div>
+
       )}
     </div>
   );

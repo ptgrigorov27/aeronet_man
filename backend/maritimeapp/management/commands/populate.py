@@ -10,8 +10,9 @@ import requests
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand
 from django.db.models import Max, Min
-from maritimeapp.models import *
 from rest_framework.exceptions import ValidationError
+
+from maritimeapp.models import *
 
 NUM_WORKERS = 5
 
