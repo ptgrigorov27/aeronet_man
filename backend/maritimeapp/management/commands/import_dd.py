@@ -505,7 +505,7 @@ class Command(BaseCommand):
                 lines = f.readlines(806)
                 baseheader_l1 = lines[0]
                 baseheader_l2 = lines[2]
-                print(",".join(lines[1].split(",")[1:]))
+                # print(",".join(lines[1].split(",")[1:]))
 
                 if ".lev" in file:
                     datatype = "AOD"
@@ -528,5 +528,5 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.setup()
         self.setup_header_table()
-        # self.csv()
-        # self.push_to_db()
+        self.csv()
+        self.push_to_db()
