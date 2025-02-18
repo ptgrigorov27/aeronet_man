@@ -213,6 +213,10 @@ const SidePanel: React.FC = () => {
         ? disposition.match(/filename="?(.+)"?/)
         : null;
       const filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
+      if (filename.charAt(str.length - 1) === "_") {
+         filename = str.slice(0, -1);
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
 
