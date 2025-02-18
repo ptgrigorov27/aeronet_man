@@ -46,7 +46,8 @@ if (type.includes("std") || type.includes("aod")) {
 
  const tickPositions = markerTicks.map((_, index) => {
     const percentagePosition = (index / (markerTicks.length - 1)) * 100;
-    return `${percentagePosition}%`;
+ 
+      return `${percentagePosition}%`;
  });
 
 
@@ -67,7 +68,7 @@ if (type.includes("std") || type.includes("aod")) {
       }}
     >
       <Typography variant="body1" sx={{ marginBottom: '8px' }}>
-        Data Preview: <strong>{type.toUpperCase().replace(/_/g, ' ')}</strong>
+        Data Preview: <strong>{type.toUpperCase().replace(/_/g, ' ').replace("NM","nm")}</strong>
       </Typography>
       
       <OverlayTrigger
@@ -117,7 +118,7 @@ if (type.includes("std") || type.includes("aod")) {
       <Box sx={{ position: 'relative', width: '278px', margin: '0 auto' }}>
         <Grid container justifyContent="space-between" sx={{ marginTop: '16px' }}>
           {markerTicks.map((tick, index) => (
-            <Grid item key={index} sx={{ position: 'relative', textAlign: 'center' }}>
+            <Grid item key={index} sx={{ position: 'relative', textAlign: 'right' }}>
               <Typography variant="caption" sx={{ position: 'relative', top: '-8px' }}>
                 {tick}
               </Typography>

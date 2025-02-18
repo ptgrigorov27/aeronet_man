@@ -45,23 +45,17 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
       //set sites selection from previous session
       const updatedSelection = new Set(parentSelectedSites);
       onSelectionChange(updatedSelection, "add");
-
+        
       //set date from previous options
       const savedStartDate = localStorage.getItem("startDate");
       const savedEndDate = localStorage.getItem("endDate");
-      if(!firstRun && (savedEndDate == "" || savedStartDate == "")) 
-      {
-        clearDates();
-        setFirstRun(true);
-      }
-
 
       console.log("Start date end date", savedStartDate, savedEndDate);
       if (savedStartDate && savedEndDate) {
         setStartDate(savedStartDate);
         setEndDate(savedEndDate);
       }
-    }
+    } 
   }, [isModalShown]);
 
   useEffect(() => {
@@ -80,8 +74,6 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
   // store start and end date to localStorage
   useEffect(() => {
     onDateChange(startDate, endDate);
-    localStorage.setItem("startDate", startDate);
-    localStorage.setItem("endDate", endDate);
   }, [startDate, endDate]);
 
   // remove the dates from localStorage
@@ -223,14 +215,20 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
           pattern="\d{2}-\d{2}-\d{4}"
         />
       </div>
+      { !endDate &&  
+      <p className="text-center">
+       Having trouble initally setting date? Click "Clear Date."
+      </p>
+      }
       <button onClick={clearDates} className="btn btn-secondary clear-date-btn">
         Clear Date
       </button>
+      
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div className="w-50">
           <button
             onClick={selectAllFilteredSites}
-            className="btn btn-primary w-100"
+            className="btn btn-success w-100"
           >
             Select All
           </button>

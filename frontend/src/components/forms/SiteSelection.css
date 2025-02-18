@@ -47,12 +47,13 @@ label {
 }
 
 .site-list-item.selected {
-  background-color: #343a40; /* background for selected item */
+  background-color: #0a58ca; /* background for selected item */
   color: #f8f9fa; /* contrasting color for selected item */
+  border-radius: 10px;
 }
 
 .site-list-item:hover {
-  background-color: #e9ecef; /* background on hover */
+  background-color: grey; /* background on hover */
 }
 
 /* date range inputs to be next to each other */

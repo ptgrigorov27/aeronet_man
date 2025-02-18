@@ -21,7 +21,7 @@ export interface Marker {
   filename: string;
   date: Date;
   time: Date;
-  latlng: {
+  coordinates: {
     lat: number;
     lng: number;
   };
@@ -260,7 +260,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       let lastClickedSite: string | null = null;
 
       data.forEach((markerData) => {
-        const { latlng, value, date, site } = markerData;
+        const { coordinates, value, date, site } = markerData;
 
         if (!siteGroups[site]) {
           siteGroups[site] = L.featureGroup().addTo(map);
@@ -270,7 +270,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         const markerColor = setColor(value);
         const fillOpacity =
           markerColor && markerColor === d3.color("grey") ? 0.6 : 0.9;
-        const cruiseMarker = L.circleMarker([latlng.lat, latlng.lng], {
+        const cruiseMarker = L.circleMarker([coordinates.lat, coordinates.lng], {
           color: markerColor,
           radius: markerSize,
           fillOpacity: fillOpacity,
@@ -309,7 +309,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           cruiseMarker
             .bindPopup(
               `<b>Cruise:</b> ${cruiseMarker.options.site}<br>
-                             <b>${type.toUpperCase().replace(/_/g, " ")}</b> ${cruiseMarker.options.value.toFixed(4)}<br>
+                             <b>${type.toUpperCase().replace(/_/g, " ").replace("NM","nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}<br>
                              <b>Date:</b> ${cruiseMarker.options.date}`,
             )
             .openPopup();
@@ -357,7 +357,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
             layer
               .bindPopup(
                 `<b>Cruise:</b> ${layer.options.site}<br>
-                            <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}<br>
+                            <b>${type.toUpperCase().replace(/_/g, " ").replace("NM","nm")}:</b> ${layer.options.value.toFixed(3)}<br>
                             <b>Date:</b> ${layer.options.date}`,
               )
               .openPopup();
@@ -401,9 +401,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       .filter((marker) => marker.site === site)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const latlngs = siteMarkers.map((marker) => [
-      marker.latlng.lat,
-      marker.latlng.lng,
+    const coordinatess = siteMarkers.map((marker) => [
+      marker.coordinates.lat,
+      marker.coordinates.lng,
     ]);
 
     // Define color scale
@@ -416,10 +416,10 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     const polylineGroup = L.featureGroup().addTo(map);
 
     // Draw polyline segments with color gradient
-    latlngs.forEach((latlng, index) => {
-      const nextLatLng = latlngs[index + 1];
+    coordinatess.forEach((latlng, index) => {
+      const nextLatLng = coordinatess[index + 1];
       if (nextLatLng) {
-        const fraction = index / latlngs.length;
+        const fraction = index / coordinatess.length;
         const color = colorScale(fraction);
         L.polyline([latlng, nextLatLng], {
           weight: 3,

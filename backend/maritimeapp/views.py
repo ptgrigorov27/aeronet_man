@@ -97,6 +97,7 @@ def process_file(file_path, start_date, end_date, bounds):
         print(f"Error processing file {file_path}: {e}")
 
 
+import csv
 # ----- Download #TODO: Swap to database downlaod instead of file creation
 import json
 import os
@@ -113,50 +114,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
-from .models import Site, SiteMeasurementsDaily15
-
-
-def get_files_to_copy(sites, retrievals, frequency, quality, file_endings):
-    quality_map = {
-        "AOD": {
-            "Level 1.0": "lev10",
-            "Level 1.5": "lev15",
-            "Level 2.0": "lev20",
-        },
-        "SDA": {
-            "Level 1.0": "ONEILL_10",
-            "Level 1.5": "ONEILL_15",
-            "Level 2.0": "ONEILL_20",
-        },
-    }
-
-    files_to_copy = []
-    for retrieval in retrievals:
-        if retrieval not in quality_map:
-            print(f"Warning: Retrieval '{retrieval}' not in quality map")
-            continue
-
-        for site in sites:
-            for freq in frequency:
-                for q in quality:
-                    if freq == "Series":
-                        prefix = "series"
-                    elif freq == "Point":
-                        prefix = "all_points"
-                    elif freq == "Daily":
-                        prefix = "daily"
-                    else:
-                        continue
-
-                    file_ending = quality_map[retrieval].get(q)
-                    if file_ending:
-                        file_name = f"{site}_{prefix}.{file_ending}"
-                        file_ending_only = f"{prefix}.{file_ending}"
-
-                        if file_ending_only in file_endings:
-                            files_to_copy.append(file_name)
-
-    return files_to_copy
+from .models import *
 
 
 def copy_files(src_dir, temp_dir, retrievals, files_to_copy):
@@ -238,7 +196,7 @@ def process_files(temp_dir, start_date, end_date, bounds, retrievals):
 
 @csrf_protect
 @require_POST
-def download_data(request):
+def download_data2(request):
     src_dir = r"./src"
     temp_base_dir = r"./temp"
     unique_temp_folder = str(int(time.time())) + "_MAN_DATA"
@@ -339,6 +297,231 @@ def download_data(request):
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
 
+def get_files_to_copy(sites, retrievals, frequency, quality, file_endings):
+    quality_map = {
+        "AOD": {
+            "Level 1.0": "lev10",
+            "Level 1.5": "lev15",
+            "Level 2.0": "lev20",
+        },
+        "SDA": {
+            "Level 1.0": "ONEILL_10",
+            "Level 1.5": "ONEILL_15",
+            "Level 2.0": "ONEILL_20",
+        },
+    }
+
+    files_to_copy = []
+    for retrieval in retrievals:
+        if retrieval not in quality_map:
+            print(f"Warning: Retrieval '{retrieval}' not in quality map")
+            continue
+
+        for site in sites:
+            for freq in frequency:
+                for q in quality:
+                    if freq == "Series":
+                        prefix = "series"
+                    elif freq == "Point":
+                        prefix = "all_points"
+                    elif freq == "Daily":
+                        prefix = "daily"
+                    else:
+                        continue
+
+                    file_ending = quality_map[retrieval].get(q)
+                    if file_ending:
+                        file_name = f"{site}_{prefix}.{file_ending}"
+                        file_ending_only = f"{prefix}.{file_ending}"
+
+                        if file_ending_only in file_endings:
+                            files_to_copy.append(file_name)
+
+    return files_to_copy
+
+
+@csrf_protect
+@require_POST
+def download_data(request):
+    src_dir = r"./src"
+    temp_base_dir = r"./temp"
+    unique_temp_folder = str(int(time.time())) + "_MAN_DATA"
+
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+
+    sites = data.get("sites", [])
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    retrievals = data.get("retrievals", [])
+    frequency = data.get("frequency", [])
+    quality = data.get("quality", [])
+    bounds = {
+        "min_lat": data.get("min_lat", None),
+        "min_lng": data.get("min_lng", None),
+        "max_lat": data.get("max_lat", None),
+        "max_lng": data.get("max_lng", None),
+    }
+
+    if (start_date is not None) or (end_date is not None):
+        init_start_date = datetime(2004, 10, 16).strftime("%Y-%m-%d")
+        today_date = datetime.now().date().strftime("%Y-%m-%d")
+
+        if start_date is not None:
+            if start_date == init_start_date:
+                start_date = None
+        if end_date is not None:
+            if end_date == today_date:
+                end_date = None
+
+    full_temp_path = os.path.join(temp_base_dir, unique_temp_folder)
+    os.makedirs(full_temp_path, exist_ok=True)
+
+    # print(sites, retrievals, frequency, quality)
+
+    tar_filename = f"{unique_temp_folder}.tar.gz"
+    tar_path = os.path.join(temp_base_dir, tar_filename)
+    directory_to_archive = os.path.join(temp_base_dir, unique_temp_folder)
+
+    model = None
+    filename = None
+    date_filter = Q()
+
+    if start_date:
+        date_filter &= Q(date_DD_MM_YYYY__gte=start_date)
+    if end_date:
+        date_filter &= Q(date_DD_MM_YYYY__lte=end_date)
+
+    for retrieval in retrievals:
+        for freq in frequency:
+            match (retrieval, freq):
+                case ("SDA", "Point"):
+                    model = DownloadSDAAP
+                    filename = "MAN_DATASET_SDA_POINT"
+
+                case ("SDA", "Series"):
+                    model = DownloadSDASeries
+                    filename = "MAN_DATASET_SDA_SERIES"
+
+                case ("SDA", "Daily"):
+                    model = DownloadSDADaily
+                    filename = "MAN_DATASET_SDA_DAILY"
+
+                case ("AOD", "Daily"):
+                    model = DownloadAODDaily
+                    filename = "MAN_DATASET_AOD_DAILY"
+
+                case ("AOD", "Series"):
+                    model = DownloadAODSeries
+                    filename = "MAN_DATASET_AOD_SERIES"
+
+                case ("AOD", "Point"):
+                    model = DownloadAODAP
+                    filename = "MAN_DATASET_AOD_POINT"
+
+            fieldnames = [field.name for field in model._meta.fields]
+            fieldnames.pop(0)
+            quality_map = {"Level 1.0": 10, "Level 1.5": 15, "Level 2.0": 20}
+
+            temp_fn = filename
+
+            for level in quality:
+                level_value = quality_map.get(level)
+
+                filename = temp_fn + str(level_value)
+
+                header = TableHeader.objects.filter(
+                    level=quality_map[level], datatype=retrieval
+                ).first()
+                l1_header = header.base_header_l1
+                l2_header = header.base_header_l2
+                query = model.objects.filter(cruise__in=sites, level=level_value)
+
+                if date_filter:
+                    query = query.filter(date_filter)
+
+                if all(value is not None for value in bounds.values()):
+                    min_point = Point(bounds["min_lng"], bounds["min_lat"])
+                    max_point = Point(bounds["max_lng"], bounds["max_lat"])
+
+                    query = query.filter(
+                        coordinates__gte=min_point, coordinates__lte=max_point
+                    )
+
+                if query.exists():
+                    with open(
+                        os.path.join(full_temp_path, filename + str(".csv")),
+                        "w",
+                        newline="",
+                    ) as file:
+                        file.write(f"{l1_header}")
+                        file.write(f"{freq},** interpolated 500nm channel **\n")
+                        file.write(f"{l2_header}")
+
+                        writer = csv.DictWriter(file, fieldnames=fieldnames)
+                        writer.writeheader()
+
+                        queryset_dict = query.values(*fieldnames).iterator()
+
+                        writer.writerows(queryset_dict)
+    try:
+        keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
+        for policy_file in keep_files:
+            src_policy_file = os.path.join(src_dir, policy_file)
+            temp_policy_file = os.path.join(full_temp_path, policy_file)
+
+            os.makedirs(os.path.dirname(temp_policy_file), exist_ok=True)
+
+            if os.path.isfile(src_policy_file):
+                shutil.copy(src_policy_file, temp_policy_file)
+                print(f"Copied {src_policy_file} to {temp_policy_file}")
+            else:
+                print(f"Source policy file {src_policy_file} does not exist")
+
+        subprocess.run(
+            [
+                "tar",
+                "-czvf",
+                os.path.join("./temp", tar_path.split("/")[2]),
+                "-C",
+                full_temp_path,
+                ".",
+            ],
+            check=True,
+        )
+        print(f"Successfully created {tar_filename} from {directory_to_archive}")
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while creating the tar file: {e}")
+        return JsonResponse(
+            {"error": "An error occurred while creating the tar file."}, status=500
+        )
+
+    try:
+        with open(tar_path, "rb") as f:
+            response = HttpResponse(
+                f.read(),
+                content_type="application/gzip",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{tar_filename}"'
+                },
+            )
+
+            return response
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    finally:
+        if os.path.exists(full_temp_path):
+            shutil.rmtree(full_temp_path)
+            print(f"Deleted temporary directory {full_temp_path}")
+        if os.path.exists(tar_path):
+            os.remove(tar_path)
+            print(f"Deleted temporary file {tar_path}")
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
 from django.contrib.gis.geos import Point, Polygon
 from django.db.models import F, Q
 ##### INTERFACING FRONT-END ####
@@ -372,7 +555,7 @@ def list_sites(request):
 
             # Get all Site IDs that have measurements within the bounding box
             filtered_sites_ids = (
-                SiteMeasurementsDaily15.objects.filter(latlng__within=bbox_polygon)
+                SiteMeasurementsDaily15.objects.filter(coordinates__within=bbox_polygon)
                 .values_list("site_id", flat=True)
                 .distinct()
             )
@@ -432,7 +615,6 @@ from .models import Site, SiteMeasurementsDaily15
 def get_display_info(request):
     returned = []
     for field in SiteMeasurementsDaily15._meta.get_fields():
-        print(field)
         if isinstance(field, models.FloatField):
             returned.append(field.name)
     return JsonResponse({"opts": returned})
@@ -478,7 +660,7 @@ def site_measurements(request):
         polygon = Polygon.from_bbox(
             (float(min_lng), float(min_lat), float(max_lng), float(max_lat))
         )
-        queryset = queryset.filter(latlng__within=polygon).distinct()
+        queryset = queryset.filter(coordinates__within=polygon).distinct()
 
     if start_date_str and end_date_str:
         start_date = parse_date(start_date_str)
@@ -493,19 +675,19 @@ def site_measurements(request):
 
     measurements = list(
         queryset.values(
-            "site", "filename", "date", "time", "latlng", "aeronet_number", aod_key
+            "site", "filename", "date", "time", "coordinates", "aeronet_number", aod_key
         )
         # queryset.exclude(**{aod_key: -999}).values(
-        #     "site", "filename", "date", "time", "latlng", "aeronet_number", aod_key
+        #     "site", "filename", "date", "time", "coordinates", "aeronet_number", aod_key
         # )
     )
 
     for measurement in measurements:
-        latlng = measurement.get("latlng")
-        if isinstance(latlng, Point):
-            measurement["latlng"] = {"lng": latlng.x, "lat": latlng.y}
+        coordinates = measurement.get("coordinates")
+        if isinstance(coordinates, Point):
+            measurement["coordinates"] = {"lng": coordinates.x, "lat": coordinates.y}
         else:
-            measurement["latlng"] = None
+            measurement["coordinates"] = None
 
         measurement["value"] = measurement.pop(aod_key)
 

@@ -26,24 +26,7 @@ const CustomControls: React.FC = () => {
       attributionControlRef.current = attributionControl;
     }
 
-    // GitHub control
-    if (!githubControlRef.current) {
-      const githubControl = L.control({ position: "bottomright" });
-      githubControl.onAdd = () => {
-        const div = L.DomUtil.create("div", "github-link");
-        div.innerHTML = `
-          <a href="https://github.com/rell/aeronet_man" target="_blank" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.7); padding: 5px; border-radius: 0px;">
-            <img src="https://www.openmoji.org/data/color/svg/1F6DF.svg" alt="GitHub" style="width: auto; height: 20px; margin-right: 8px;">
-            <strong>Github Repository</strong>
-          </a>
-        `;
-        div.style.marginBottom = "5px";
-        div.style.marginRight = "0px";
-        return div;
-      };
-      githubControl.addTo(map);
-      githubControlRef.current = githubControl;
-    }
+   
 
     // Report control
     if (!reportControlRef.current) {
@@ -63,7 +46,24 @@ const CustomControls: React.FC = () => {
       reportControl.addTo(map);
       reportControlRef.current = reportControl;
     }
-
+ // GitHub control
+    if (!githubControlRef.current) {
+      const githubControl = L.control({ position: "bottomright" });
+      githubControl.onAdd = () => {
+        const div = L.DomUtil.create("div", "github-link");
+        div.innerHTML = `
+          <a href="https://github.com/rell/aeronet_man" target="_blank" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.7); padding: 5px; border-radius: 0px;">
+            <img src="https://www.openmoji.org/data/color/svg/1F6DF.svg" alt="GitHub" style="width: auto; height: 20px; margin-right: 8px;">
+            <strong>Project Repo</strong>
+          </a>
+        `;
+        div.style.marginBottom = "5px";
+        div.style.marginRight = "0px";
+        return div;
+      };
+      githubControl.addTo(map);
+      githubControlRef.current = githubControl;
+    }
     return () => {
       // to remove controls 
       // if (githubControlRef.current) map.removeControl(githubControlRef.current);

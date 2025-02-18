@@ -207,11 +207,8 @@ const SidePanel: React.FC = () => {
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
-        setResponseSuccess(false);
       }
-      setResponseSuccess(response.ok);
       const disposition = response.headers.get("content-disposition");
-      console.log(response);
       const filenameMatch = disposition
         ? disposition.match(/filename="?(.+)"?/)
         : null;
@@ -229,12 +226,13 @@ const SidePanel: React.FC = () => {
     } catch (error) {
       console.error("Error during download:", error);
     } finally {
-      if (responseSucess) {
-        setShowNotification(true);
-      }
-      setShowLoading(false);
+    
+      setShowNotification(true);
+      setTimeout(() => {
+        setShowNotification(false);
+      }, 5000);
+      setShowLoading(false); // Show the download processing indicator
     }
-
     setShowDownloadModal(false);
   };
   {

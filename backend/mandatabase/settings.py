@@ -45,13 +45,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = (os.getenv("DJANGO_SECRET_KEY"),)
 
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
-
-# local
-ALLOWED_HOSTS = ["*"]
-
-
 # Application definition
 INSTALLED_APPS = [
     "corsheaders",
@@ -106,6 +99,43 @@ CORS_ALLOW_HEADERS = [
     "aod_key",
     "sites",
 ]
+
+# local
+# # SECURITY WARNING: don't run with debug turned on in production!
+# DEBUG = True
+#
+# CSRF_COOKIE_NAME = "X-CSRFToken"
+# CSRF_TRUSTED_ORIGINS = [
+#     f"http://{db_host}:3000",  # Ensure db_host is a valid string (e.g., 'localhost' or IP)
+#     "https://*.nasa.gov",
+# ]
+# CSRF_COOKIE_HTTPONLY = False
+# CSRF_COOKIE_SECURE = True
+# CSRF_COOKIE_SAMESITE = "None"
+#
+# # Fix CORS settings
+# CORS_ALLOW_ALL_ORIGINS = False  # Disable allowing all origins
+# CORS_ORIGIN_ALLOW_ALL = False  # Disable allowing all origins
+# CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOWED_ORIGINS = [
+#     f"http://{db_host}:3000",  # Use the specific host and port with a valid scheme
+#     "https://*.nasa.gov",  # This could be a valid URL with scheme/netloc
+# ]
+#
+# ALLOWED_HOSTS = [
+#     "127.0.0.1",
+#     "localhost",
+#     # "localhost:63343", # Add more if needed
+# ]
+#
+# CORS_ALLOW_METHODS = ["GET", "POST"]
+# CORS_ALLOW_HEADERS = [
+#     "Content-Type",
+#     "X-CSRFToken",
+# ]
+# prod
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = False
 
 CSRF_COOKIE_NAME = "X-CSRFToken"
 CSRF_TRUSTED_ORIGINS = [
@@ -165,6 +195,7 @@ DATABASES = {
         "PASSWORD": db_password,
         "HOST": db_host,
         "PORT": db_port,
+        "CONN_MAX_AGE": 600,
     }
 }
 
