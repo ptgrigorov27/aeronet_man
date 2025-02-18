@@ -104,7 +104,7 @@ class Command(BaseCommand):
                     date=date,
                     time=row["Time(hh:mm:ss)"],
                     air_mass=float(row["Air Mass"]),
-                    latlng=latlng,
+                    coordinates=latlng,
                     aod_340nm=float(row["AOD_340nm"]),
                     aod_380nm=float(row["AOD_380nm"]),
                     aod_440nm=float(row["AOD_440nm"]),
