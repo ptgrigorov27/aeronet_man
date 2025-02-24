@@ -512,14 +512,14 @@ class Command(BaseCommand):
 
             with open(file, "r") as f:
 
-            freq = None
-            match file:
-                case _ if "all_points" in file:
-                    freq = "Point"
-                case _ if "series" in file:
-                    freq = "Series"
-                case _ if "daily" in file:
-                    freq = "Daily"
+                freq = None
+                match file:
+                    case _ if "all_points" in file:
+                        freq = "Point"
+                    case _ if "series" in file:
+                        freq = "Series"
+                    case _ if "daily" in file:
+                        freq = "Daily"
 
                 lines = f.readlines(806)
                 baseheader_l1 = lines[0]
