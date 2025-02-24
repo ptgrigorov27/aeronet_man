@@ -533,6 +533,9 @@ class Command(BaseCommand):
                 new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
                 header.extend(new_cols)
                 header = [element.replace("\n", "") for element in header]
+                new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
+                header.extend(new_cols)
+
                 header = ",".join(header)
                 # print(file)
                 # print(header)
@@ -562,5 +565,5 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.setup()
         self.setup_header_table()
-        # self.csv()
-        # self.push_to_db()
+        self.csv()
+        self.push_to_db()
