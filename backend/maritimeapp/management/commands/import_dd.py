@@ -528,15 +528,13 @@ class Command(BaseCommand):
                 header = header.split(",")
                 header.remove("Latitude")
                 header.remove("Longitude")
-                new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
-                header.extend(new_cols)
                 header = [element.replace("\n", "") for element in header]
                 new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
                 header.extend(new_cols)
 
                 header = ",".join(header)
-                # print(file)
-                # print(header)
+                print(file)
+                print(header)
 
                 # print(",".join(lines[1].split(",")[1:]))
 
@@ -547,15 +545,17 @@ class Command(BaseCommand):
                     datatype = "SDA"
                     level = file.split(".ONEILL_")[1]
                 f.close()
-
-            h, created = TableHeader.objects.get_or_create(
-                freq=freq,
-                datatype=datatype,
-                level=level,
-                base_header_l1=baseheader_l1,
-                base_header_l2=baseheader_l2,
-                header=header,
-            )
+            try:
+                h, created = TableHeader.objects.get_or_create(
+                    freq=freq,
+                    datatype=datatype,
+                    level=level,
+                    base_header_l1=baseheader_l1,
+                    base_header_l2=baseheader_l2,
+                    header=header,
+                )
+            except:
+                pass
 
         for file in files:
             addHeadToDB(file)
