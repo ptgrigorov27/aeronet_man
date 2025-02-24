@@ -17,6 +17,10 @@ from pathlib import Path
 
 from django.core.management.utils import get_random_secret_key
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+LOG_DIR = os.path.join(BASE_DIR, "log")
+os.makedirs(LOG_DIR, exist_ok=True)
 # print(get_random_secret_key())
 
 # Read the config file
@@ -107,6 +111,7 @@ CORS_ALLOW_HEADERS = [
 # CSRF_COOKIE_NAME = "X-CSRFToken"
 # CSRF_TRUSTED_ORIGINS = [
 #     f"http://{db_host}:3000",  # Ensure db_host is a valid string (e.g., 'localhost' or IP)
+#     f"http://{db_host}:3001",  # Ensure db_host is a valid string (e.g., 'localhost' or IP)
 #     "https://*.nasa.gov",
 # ]
 # CSRF_COOKIE_HTTPONLY = False
@@ -118,7 +123,7 @@ CORS_ALLOW_HEADERS = [
 # CORS_ORIGIN_ALLOW_ALL = False  # Disable allowing all origins
 # CORS_ALLOW_CREDENTIALS = True
 # CORS_ALLOWED_ORIGINS = [
-#     f"http://{db_host}:3000",  # Use the specific host and port with a valid scheme
+#     f"http://{db_host}:3001",  # Use the specific host and port with a valid scheme
 #     "https://*.nasa.gov",  # This could be a valid URL with scheme/netloc
 # ]
 #
@@ -198,6 +203,46 @@ DATABASES = {
         "CONN_MAX_AGE": 600,
     }
 }
+
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# LOGGING = {
+#     "version": 1,
+#     "disable_existing_loggers": False,
+#     "formatters": {
+#         "verbose": {
+#             "format": "{levelname} {asctime} {module} {message}",
+#             "style": "{",
+#         },
+#         "simple": {
+#             "format": "{levelname} {message}",
+#             "style": "{",
+#         },
+#     },
+#     "handlers": {
+#         "file_debug": {
+#             "level": "DEBUG",
+#             "class": "logging.FileHandler",
+#             "filename": os.path.join(BASE_DIR, "log", "debug.log"),
+#             "formatter": "verbose",
+#         },
+#         "file_error": {
+#             "level": "ERROR",
+#             "class": "logging.FileHandler",
+#             "filename": os.path.join(BASE_DIR, "log", "error.log"),
+#             "formatter": "verbose",
+#         },
+#         "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+#     },
+#     "loggers": {
+#         "django": {
+#             "handlers": ["file_debug", "file_error", "console"],
+#             "level": "DEBUG",
+#             "propagate": True,
+#         },
+#     },
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

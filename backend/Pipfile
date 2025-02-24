@@ -43,6 +43,7 @@ zipp = "*"
 dask = "*"
 distributed = "*"
 gunicorn = "*"
+pyarrow = "*"
 
 [dev-packages]
 

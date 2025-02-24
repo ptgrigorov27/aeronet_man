@@ -114,6 +114,15 @@ const SidePanel: React.FC = () => {
     }
   }, [showNotification]);
 
+  useEffect(() => {
+   if(map)
+     {
+      startSeleted(); 
+     }
+  }, [map])
+  
+
+
   {
     /* handle download */
   }
@@ -137,6 +146,43 @@ const SidePanel: React.FC = () => {
   const handleToggleModal = () => {
     setShowModal(true);
   };
+
+ const startSeleted = () => {
+   let sites = new Set<string>();
+   const fetchSites = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        if (
+          minLat !== undefined &&
+          minLng !== undefined &&
+          maxLat !== undefined &&
+          maxLng !== undefined
+        ) {
+          params.append("min_lat", minLat.toString());
+          params.append("min_lng", minLng.toString());
+          params.append("max_lat", maxLat.toString());
+          params.append("max_lng", maxLng.toString());
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
+        );
+        const returned: SiteSelect[] = await response.json();
+        setSelectedSites(new Set<string>(returned.map((site) => site.name )));
+      } catch (error) {
+        console.error("Error fetching sites:", error);
+      }
+    };
+
+    fetchSites();
+    setIsSet(true);
+    setTimeout(() => {
+      setIsSet(false);
+    }, 100);
+
+ };
 
   const updateType = () => {
     setTypeChange(true);
@@ -212,9 +258,9 @@ const SidePanel: React.FC = () => {
       const filenameMatch = disposition
         ? disposition.match(/filename="?(.+)"?/)
         : null;
-      const filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
-      if (filename.charAt(str.length - 1) === "_") {
-         filename = str.slice(0, -1);
+      let filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
+      if (filename.charAt(filename.length - 1) === "_") {
+         filename = filename.slice(0, -1);
       }
 
       const blob = await response.blob();

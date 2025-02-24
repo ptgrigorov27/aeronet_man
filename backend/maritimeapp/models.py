@@ -139,7 +139,6 @@ class DownloadAODAP(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     air_mass = models.FloatField(default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0), db_index=True)
     aod_340nm = models.FloatField(default=-999.0)
     aod_380nm = models.FloatField(default=-999.0)
     aod_440nm = models.FloatField(default=-999.0)
@@ -153,6 +152,7 @@ class DownloadAODAP(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField(db_index=True)
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -160,6 +160,7 @@ class DownloadAODAP(models.Model):
 
     class Meta:
         ordering = ["cruise"]
+        db_table = "app_downloadaodap"
 
 
 """
@@ -199,7 +200,6 @@ class DownloadAODDaily(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     air_mass = models.FloatField(default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
     aod_340nm = models.FloatField(default=-999.0)
     aod_380nm = models.FloatField(default=-999.0)
     aod_440nm = models.FloatField(default=-999.0)
@@ -224,6 +224,7 @@ class DownloadAODDaily(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField()
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -267,7 +268,6 @@ class DownloadAODSeries(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     air_mass = models.FloatField(default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
     aod_340nm = models.FloatField(default=-999.0)
     aod_380nm = models.FloatField(default=-999.0)
     aod_440nm = models.FloatField(default=-999.0)
@@ -292,6 +292,7 @@ class DownloadAODSeries(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField()
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -334,7 +335,6 @@ class DownloadSDAAP(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     julian_day = models.FloatField(null=True, blank=True, default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
     total_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     fine_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     coarse_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
@@ -370,6 +370,7 @@ class DownloadSDAAP(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField(null=True, blank=True)
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -428,7 +429,6 @@ class DownloadSDADaily(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     julian_day = models.FloatField(null=True, blank=True, default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
     total_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     fine_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     coarse_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
@@ -499,6 +499,7 @@ class DownloadSDADaily(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField(null=True, blank=True)
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -509,7 +510,6 @@ class DownloadSDASeries(models.Model):
     date_DD_MM_YYYY = models.DateField(db_index=True)
     time_HH_MM_SS = models.TimeField(db_index=False)
     julian_day = models.FloatField(null=True, blank=True, default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
     total_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     fine_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
     coarse_mode_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
@@ -580,6 +580,7 @@ class DownloadSDASeries(models.Model):
     last_processing_date_DD_MM_YYYY = models.DateField(null=True, blank=True)
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
+    coordinates = gis_models.PointField(default=Point(0, 0))
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
@@ -587,6 +588,7 @@ class DownloadSDASeries(models.Model):
 
 
 class TableHeader(models.Model):
+    freq = models.CharField(max_length=255, default="")
     datatype = models.CharField(max_length=255)
     level = models.IntegerField()
     base_header_l1 = models.CharField(
@@ -595,10 +597,11 @@ class TableHeader(models.Model):
     base_header_l2 = models.CharField(
         max_length=9999
     )  # Ex. Due to the research and development phase characterizing AERONET-MAN; use of data requires offering co-authorship to Principal Investigators.
+    header = models.CharField(max_length=9999)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["datatype", "level"], name="unique_dataType_level"
+                fields=["datatype", "level", "freq"], name="unique_dataType_level"
             )
         ]

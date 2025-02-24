@@ -486,6 +486,15 @@ class Command(BaseCommand):
 
     def setup_header_table(self):
         files = []
+
+        files.append(get_single_match(csv_dir, "*series.lev15"))
+        files.append(get_single_match(csv_dir, "*series.lev20"))
+        files.append(get_single_match(csv_dir, "*series.ONEILL_15"))
+        files.append(get_single_match(csv_dir, "*series.ONEILL_20"))
+        files.append(get_single_match(csv_dir, "*daily.lev15"))
+        files.append(get_single_match(csv_dir, "*daily.lev20"))
+        files.append(get_single_match(csv_dir, "*daily.ONEILL_15"))
+        files.append(get_single_match(csv_dir, "*daily.ONEILL_20"))
         files.append(get_single_match(csv_dir, "*all_points.lev10*"))
         files.append(get_single_match(csv_dir, "*all_points.lev15"))
         files.append(get_single_match(csv_dir, "*all_points.lev20"))
@@ -502,9 +511,32 @@ class Command(BaseCommand):
             baseheader_l3 = None
 
             with open(file, "r") as f:
+
+                freq = None
+                match file:
+                    case _ if "all_points" in file:
+                        freq = "Point"
+
+                    case _ if "all_points" in file:
+                        freq = "Series"
+
+                    case _ if "all_points" in file:
+                        freq = "Daily"
+
                 lines = f.readlines(806)
                 baseheader_l1 = lines[0]
                 baseheader_l2 = lines[2]
+                header = lines[4]
+                header = header.split(",")
+                header.remove("Latitude")
+                header.remove("Longitude")
+                new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
+                header.extend(new_cols)
+                header = [element.replace("\n", "") for element in header]
+                header = ",".join(header)
+                # print(file)
+                # print(header)
+
                 # print(",".join(lines[1].split(",")[1:]))
 
                 if ".lev" in file:
@@ -516,10 +548,12 @@ class Command(BaseCommand):
                 f.close()
 
             h, created = TableHeader.objects.get_or_create(
+                freq=freq,
                 datatype=datatype,
                 level=level,
                 base_header_l1=baseheader_l1,
                 base_header_l2=baseheader_l2,
+                header=header,
             )
 
         for file in files:
@@ -528,5 +562,5 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.setup()
         self.setup_header_table()
-        self.csv()
-        self.push_to_db()
+        # self.csv()
+        # self.push_to_db()
