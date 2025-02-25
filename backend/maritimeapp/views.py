@@ -238,7 +238,7 @@ def download_data(request):
                         file.write(f"{freq},** interpolated 500nm channel **\n")
                         file.write(f"{l2_header}")
                         file.write(f"{header}")
-                        # queryset_dict = query.values(*fieldnames)
+                        queryset_dict = query.values(*fieldnames)
 
                         df = pd.DataFrame.from_records(queryset_dict)
 
