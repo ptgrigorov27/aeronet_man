@@ -210,41 +210,42 @@ def download_data(request):
 
                 filename = temp_fn + str(level_value)
 
-                header = TableHeader.objects.filter(
+                cur_header = TableHeader.objects.filter(
                     level=quality_map[level], freq=freq, datatype=retrieval
                 ).first()
-                l1_header = header.base_header_l1
-                l2_header = header.base_header_l2
-                header = header.header
+                if cur_header is not None:
+                    l1_header = cur_header.base_header_l1
+                    l2_header = cur_header.base_header_l2
+                    header = cur_header.header
 
-                query = model.objects.filter(cruise__in=sites, level=level_value)
+                    query = model.objects.filter(cruise__in=sites, level=level_value)
 
-                if date_filter:
-                    query = query.filter(date_filter)
+                    if date_filter:
+                        query = query.filter(date_filter)
 
-                if all(value is not None for value in bounds.values()):
-                    min_point = Point(bounds["min_lng"], bounds["min_lat"])
-                    max_point = Point(bounds["max_lng"], bounds["max_lat"])
+                    if all(value is not None for value in bounds.values()):
+                        min_point = Point(bounds["min_lng"], bounds["min_lat"])
+                        max_point = Point(bounds["max_lng"], bounds["max_lat"])
 
-                    query = query.filter(
-                        coordinates__gte=min_point, coordinates__lte=max_point
-                    )
+                        query = query.filter(
+                            coordinates__gte=min_point, coordinates__lte=max_point
+                        )
 
-                if query.exists():
-                    file_path = os.path.join(full_temp_path, filename + str(".csv"))
+                    if query.exists():
+                        file_path = os.path.join(full_temp_path, filename + str(".csv"))
 
-                    with open(file_path, "w", newline="") as file:
-                        file.write(f"{l1_header}")
-                        file.write(f"{freq},** interpolated 500nm channel **\n")
-                        file.write(f"{l2_header}")
-                        file.write(f"{header}")
-                        queryset_dict = query.values(*fieldnames)
+                        with open(file_path, "w", newline="") as file:
+                            file.write(f"{l1_header}")
+                            file.write(f"{freq},** interpolated 500nm channel **\n")
+                            file.write(f"{l2_header}")
+                            file.write(f"{header}")
+                            queryset_dict = query.values(*fieldnames)
 
-                        df = pd.DataFrame.from_records(queryset_dict)
+                            df = pd.DataFrame.from_records(queryset_dict)
 
-                        print(df)
-                        with open(file_path, "a", newline="") as file:
-                            df.to_csv(file, index=False, header=True)
+                            print(df)
+                            with open(file_path, "a", newline="") as file:
+                                df.to_csv(file, index=False, header=True)
     try:
         keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
         for policy_file in keep_files:

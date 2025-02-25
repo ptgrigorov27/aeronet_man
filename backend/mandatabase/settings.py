@@ -123,7 +123,7 @@ CORS_ALLOW_HEADERS = [
 # CORS_ORIGIN_ALLOW_ALL = False  # Disable allowing all origins
 # CORS_ALLOW_CREDENTIALS = True
 # CORS_ALLOWED_ORIGINS = [
-#     f"http://{db_host}:3001",  # Use the specific host and port with a valid scheme
+#     f"http://{db_host}:3000",  # Use the specific host and port with a valid scheme
 #     "https://*.nasa.gov",  # This could be a valid URL with scheme/netloc
 # ]
 #
