@@ -15,9 +15,7 @@ const LoadingIndicator: React.FC = () => {
         <br />
 
         <hr/>
-         <sup> INFO: A full cruise selection download with all available options selected may take anywhere from 1 minute to 5 minutes depending on server load.</sup>
-       
-
+         <sup> INFO: A full cruise selection download with all available options selected may take anywhere from 1 to 5 minutes depending on server load.</sup>
         <br />
          <span className="text-danger"><sup> If you notice your download is not being properly created or is incorrect. Please use the report button located in the bottom right corner to notify us.</sup> </span>
       </div>

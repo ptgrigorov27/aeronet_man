@@ -1,6 +1,8 @@
 import csv
+import datetime
 import glob
 import os
+import re
 import subprocess
 from datetime import datetime
 from functools import partial
@@ -15,6 +17,8 @@ from maritimeapp.models import *
 download_folder_path = os.path.join(".", "src")
 csv_dir = os.path.join(".", "src_csvs")
 number_of_files = 0
+timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+log_filename = f"log_dbpush_{timestamp}.txt"
 
 
 def get_single_match(directory_path, pattern):
@@ -32,34 +36,41 @@ def correct_date(value):
 
 def process(file, design_type):
     try:
-        with transaction.atomic():
-            with open(file, "r") as csvfile:
-                reader = csv.DictReader(csvfile)
-                if design_type == "sda_daily":
-                    for row in reader:
-                        process_sda_daily(row)
-                elif design_type == "sda_series":
-                    for row in reader:
-                        process_sda_series(row)
-                elif design_type == "sda_points":
-                    for row in reader:
-                        process_sda_points(row)
-                elif design_type == "aod_daily":
-                    for row in reader:
-                        process_aod_daily(row)
-                elif design_type == "aod_points":
-                    for row in reader:
-                        process_aod_points(row)
-                elif design_type == "aod_series":
-                    for row in reader:
-                        process_aod_series(row)
-                csvfile.close()
+        # with transaction.atomic():
+        with open(file, "r") as csvfile:
+            reader = csv.DictReader(csvfile)
+            if design_type == "sda_daily":
+                for row in reader:
+                    process_sda_daily(row)
+            elif design_type == "sda_series":
+                for row in reader:
+                    process_sda_series(row)
+            elif design_type == "sda_points":
+                for row in reader:
+                    process_sda_points(row)
+            elif design_type == "aod_daily":
+                for row in reader:
+                    process_aod_daily(row)
+            elif design_type == "aod_points":
+                for row in reader:
+                    process_aod_points(row)
+            elif design_type == "aod_series":
+                for row in reader:
+                    process_aod_series(row)
+            csvfile.close()
+        return True
+
     except Exception as e:
-        print(design_type)
-        print(f"test {e}")
+
+        with open(log_filename, "a") as log_file:
+            log_file.write(
+                f"FILE: {file}\n TYPE: {design_type}\n ISSUE: {e}\n DATA:\n{row}\n\n"
+            )
+        return False
 
 
 def process_sda_daily(row):
+    # print("500nm_Input_AOD:", row["500nm(int)_Input_AOD"], type(foat(row["500nm(int)_Input_AOD"])))  # Debug statement to print the value
     DownloadSDADaily.objects.get_or_create(
         date_DD_MM_YYYY=correct_date(row["Date(dd:mm:yyyy)"]),
         time_HH_MM_SS=row["Time(hh:mm:ss)"],
@@ -84,7 +95,7 @@ def process_sda_daily(row):
         ],
         aod_870nm=row["870nm_Input_AOD"],
         aod_675nm=row["675nm_Input_AOD"],
-        aod_500nm=row["500nm(int)_Input_AOD"],
+        aod_500nm=float(row["500nm_Input_AOD"]),
         aod_440nm=row["440nm_Input_AOD"],
         aod_380nm=row["380nm_Input_AOD"],
         stdev_total_aod_500nm=row["STDEV-Total_AOD_500nm(tau_a)"],
@@ -114,7 +125,7 @@ def process_sda_daily(row):
         ],
         stdev_aod_870nm=row["STDEV-870nm_Input_AOD"],
         stdev_aod_675nm=row["STDEV-675nm_Input_AOD"],
-        stdev_aod_500nm=row["STDEV-500nm(int)_Input_AOD"],
+        stdev_aod_500nm=row["STDEV-500nm_Input_AOD"],
         stdev_aod_440nm=row["STDEV-440nm_Input_AOD"],
         stdev_aod_380nm=row["STDEV-380nm_Input_AOD"],
         number_of_observations=row["Number_of_Observations"],
@@ -131,7 +142,7 @@ def process_sda_daily(row):
 
 
 def process_sda_points(row):
-    DownloadSDAAP.objects.get_or_create(
+    row = DownloadSDAAP.objects.get_or_create(
         date_DD_MM_YYYY=correct_date(row["Date(dd:mm:yyyy)"]),
         time_HH_MM_SS=row["Time(hh:mm:ss)"],
         julian_day=row["Julian_Day"],
@@ -151,13 +162,13 @@ def process_sda_points(row):
         dae_dln_wavelength_total_500nm=row["dAE/dln(wavelength)_Total_500nm(alphap)"],
         ae_fine_mode_500nm=row["AE_Fine_Mode_500nm(alpha_f)"],
         dae_dln_wavelength_fine_mode_500nm=row[
-            "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
+            "dAEdln(wavelength)_Fine_Mode_500nm(alphap_f)"
         ],
         solar_zenith_angle=row["Solar_Zenith_Angle"],
         air_mass=row["Air_Mass"],
         aod_870nm=row["870nm_Input_AOD"],
         aod_675nm=row["675nm_Input_AOD"],
-        aod_500nm=row["500nm(int)_Input_AOD"],
+        aod_500nm=row["500nm_Input_AOD"],
         aod_440nm=row["440nm_Input_AOD"],
         aod_380nm=row["380nm_Input_AOD"],
         last_processing_date_DD_MM_YYYY=correct_date(
@@ -170,6 +181,8 @@ def process_sda_points(row):
         pi=row["pi"],
         pi_email=row["pi_email"],
     )
+
+    return row
 
 
 def process_sda_series(row):
@@ -190,14 +203,14 @@ def process_sda_series(row):
         rmse_coarse_mode_aod_500nm=row["RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"],
         rmse_fmf_and_cmf_fractions_500nm=row["RMSE_FMF_and_CMF_Fractions_500nm(Deta)"],
         angstrom_exponent_total_500nm=row["Angstrom_Exponent(AE)_Total_500nm(alpha)"],
-        dae_dln_wavelength_total_500nm=row["dAE/dln(wavelength)_Total_500nm(alphap)"],
+        dae_dln_wavelength_total_500nm=row["dAEdln(wavelength)_Total_500nm(alphap)"],
         ae_fine_mode_500nm=row["AE_Fine_Mode_500nm(alpha_f)"],
         dae_dln_wavelength_fine_mode_500nm=row[
             "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
         ],
         aod_870nm=row["870nm_Input_AOD"],
         aod_675nm=row["675nm_Input_AOD"],
-        aod_500nm=row["500nm(int)_Input_AOD"],
+        aod_500nm=row["500nm_Input_AOD"],
         aod_440nm=row["440nm_Input_AOD"],
         aod_380nm=row["380nm_Input_AOD"],
         stdev_total_aod_500nm=row["STDEV-Total_AOD_500nm(tau_a)"],
@@ -227,7 +240,7 @@ def process_sda_series(row):
         ],
         stdev_aod_870nm=row["STDEV-870nm_Input_AOD"],
         stdev_aod_675nm=row["STDEV-675nm_Input_AOD"],
-        stdev_aod_500nm=row["STDEV-500nm(int)_Input_AOD"],
+        stdev_aod_500nm=row["STDEV-500nm_Input_AOD"],
         stdev_aod_440nm=row["STDEV-440nm_Input_AOD"],
         stdev_aod_380nm=row["STDEV-380nm_Input_AOD"],
         number_of_observations=row["Number_of_Observations"],
@@ -252,7 +265,7 @@ def process_aod_daily(row):
         aod_340nm=row["AOD_340nm"],
         aod_380nm=row["AOD_380nm"],
         aod_440nm=row["AOD_440nm"],
-        aod_500nm_INT=row["AOD_500nm(int)"],
+        aod_500nm=row["AOD_500nm"],
         aod_675nm=row["AOD_675nm"],
         aod_870nm=row["AOD_870nm"],
         aod_1020nm=row["AOD_1020nm"],
@@ -262,7 +275,7 @@ def process_aod_daily(row):
         std_340nm=row["STD_340nm"],
         std_380nm=row["STD_380nm"],
         std_440nm=row["STD_440nm"],
-        std_500nm_INT=row["STD_500nm(int)"],
+        std_500nm=row["STD_500nm"],
         std_675nm=row["STD_675nm"],
         std_870nm=row["STD_870nm"],
         std_1020nm=row["STD_1020nm"],
@@ -283,31 +296,36 @@ def process_aod_daily(row):
 
 
 def process_aod_points(row):
-    DownloadAODAP.objects.get_or_create(
-        date_DD_MM_YYYY=correct_date(row["Date(dd:mm:yyyy)"]),
-        time_HH_MM_SS=row["Time(hh:mm:ss)"],
-        air_mass=row["Air Mass"],
-        coordinates=Point(float(row["Longitude"]), float(row["Latitude"])),
-        aod_340nm=row["AOD_340nm"],
-        aod_380nm=row["AOD_380nm"],
-        aod_440nm=row["AOD_440nm"],
-        aod_500nm_INT=row["AOD_500nm(int)"],
-        aod_675nm=row["AOD_675nm"],
-        aod_870nm=row["AOD_870nm"],
-        aod_1020nm=row["AOD_1020nm"],
-        aod_1640nm=row["AOD_1640nm"],
-        water_vapor_CM=row["Water Vapor(cm)"],
-        angstrom_exponent_440_870=row["440-870nm_Angstrom_Exponent"],
-        last_processing_date_DD_MM_YYYY=correct_date(
-            row["Last_Processing_Date(dd:mm:yyyy)"]
-        ),
-        aeronet_number=row["AERONET_Number"],
-        microtops_number=row["Microtops_Number"],
-        cruise=row["cruise"],
-        level=row["level"],
-        pi=row["pi"],
-        pi_email=row["pi_email"],
-    )
+    try:
+        DownloadAODAP.objects.get_or_create(
+            date_DD_MM_YYYY=correct_date(row["Date(dd:mm:yyyy)"]),
+            time_HH_MM_SS=row["Time(hh:mm:ss)"],
+            air_mass=row["Air Mass"],
+            coordinates=Point(float(row["Longitude"]), float(row["Latitude"])),
+            aod_340nm=row["AOD_340nm"],
+            aod_380nm=row["AOD_380nm"],
+            aod_440nm=row["AOD_440nm"],
+            aod_500nm=row["AOD_500nm"],
+            aod_675nm=row["AOD_675nm"],
+            aod_870nm=row["AOD_870nm"],
+            aod_1020nm=row["AOD_1020nm"],
+            aod_1640nm=row["AOD_1640nm"],
+            water_vapor_CM=row["Water Vapor(cm)"],
+            angstrom_exponent_440_870=row["440-870nm_Angstrom_Exponent"],
+            last_processing_date_DD_MM_YYYY=correct_date(
+                row["Last_Processing_Date(dd:mm:yyyy)"]
+            ),
+            aeronet_number=row["AERONET_Number"],
+            microtops_number=row["Microtops_Number"],
+            cruise=row["cruise"],
+            level=row["level"],
+            pi=row["pi"],
+            pi_email=row["pi_email"],
+        )
+
+    except Exception as e:
+        print(e)
+        pass
 
 
 def process_aod_series(row):
@@ -319,7 +337,7 @@ def process_aod_series(row):
         aod_340nm=row["AOD_340nm"],
         aod_380nm=row["AOD_380nm"],
         aod_440nm=row["AOD_440nm"],
-        aod_500nm_INT=row["AOD_500nm(int)"],
+        aod_500nm=row["AOD_500nm"],
         aod_675nm=row["AOD_675nm"],
         aod_870nm=row["AOD_870nm"],
         aod_1020nm=row["AOD_1020nm"],
@@ -329,7 +347,7 @@ def process_aod_series(row):
         std_340nm=row["STD_340nm"],
         std_380nm=row["STD_380nm"],
         std_440nm=row["STD_440nm"],
-        std_500nm_INT=row["STD_500nm(int)"],
+        std_500nm=row["STD_500nm"],
         std_675nm=row["STD_675nm"],
         std_870nm=row["STD_870nm"],
         std_1020nm=row["STD_1020nm"],
@@ -384,10 +402,34 @@ class Command(BaseCommand):
         print(f"Folders copied to csv_directory moving to processing.")
 
     def push_to_db(self):
+        total_success = 0
+        total_bad = 0
+
+        def process_with_tracking(file, design_type):
+            nonlocal total_success, total_bad
+            process(file, design_type, total_success, total_bad)
+            if total_success:
+                total_success += 1
+            else:
+                total_bad += 1
 
         def process_group(csvs, design_type):
-            with Pool(processes=6) as pool:
+            total_success = 0
+            total_bad = 0
+
+            with Pool(processes=2) as pool:
                 results = pool.starmap(process, [(file, design_type) for file in csvs])
+
+            for result in results:
+                if result:
+                    total_success += 1
+                else:
+                    total_bad += 1
+            with open(log_filename, "a") as log_file:
+
+                log_file.write(f"RESULTS:\n {results}\n")
+                log_file.write(f"Total readings added: {total_success}")
+                log_file.write(f"Total readings not added: {total_bad}")
                 return results
 
         sda_daily = os.path.join(".", "src_csvs", "*daily_SDA_*.csv")
@@ -424,13 +466,9 @@ class Command(BaseCommand):
             headers = None
 
             try:
-                with open(file, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-            except UnicodeDecodeError:
                 with open(file, "r", encoding="latin-1") as f:
                     lines = f.readlines()
 
-            try:
                 pi_info = lines[3]
                 pi = (
                     pi_info.split("=")[1]
@@ -442,37 +480,34 @@ class Command(BaseCommand):
                     pi_info.split(",Email=")[1].replace("\n", "").replace(",", ";")
                 )
                 cruise = lines[1].split(",")[0].replace("\n", "")
-            except:
-                print(file, f"fail{pi_info}")
 
-            try:
                 if ".lev" in file:
                     level = file.split(".lev")[1]
                     outputcsv = "." + file.split(".")[1] + "_AOD_" + level + ".csv"
                 else:
                     level = file.split(".ONEILL_")[1]
                     outputcsv = "." + file.split(".")[1] + "_SDA_" + level + ".csv"
-            except:
-                print(file, level, outputcsv)
-            # print(level, pi, pi_email, cruise)
-            try:
                 headers = lines[4].strip().split(",")
-            except Exception as e:
-                print(file, lines)
-            try:
+                reg = re.compile(".*\(int\)")
+                bad_cols = list(filter(reg.match, headers))
+                if bad_cols:
+                    for col in bad_cols:
+                        # print(col.replace("(int)", ""))
+                        headers[headers.index(col)] = col.replace("(int)", "")
+                        # print(headers)
+
                 data = [line.strip().split(",") for line in lines[5:]]
                 df = pd.DataFrame(data, columns=headers)
-
                 df["cruise"] = cruise
                 df["level"] = level
                 df["pi"] = pi
                 df["pi_email"] = pi_email
-
                 df.to_csv(outputcsv, index=False)
-            except:
-
-                print(file, pi_info)
-                print(file, data, headers)
+            except Exception as e:
+                with open(log_filename, "a") as log_file:
+                    log_file.write(f"failed to create csv {cruise} - File: {file})\n")
+                    log_file.write(f"Header: {headers}\n")
+                    log_file.write(f"Error: {e}\n\n")
 
         for file in files_csv:
             if os.path.isfile(file) and ".csv" not in file:
@@ -528,13 +563,11 @@ class Command(BaseCommand):
                 header = header.split(",")
                 header.remove("Latitude")
                 header.remove("Longitude")
-                header = [element.replace("\n", "") for element in header]
                 new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
                 header.extend(new_cols)
+                header = [element.replace("\n", "") for element in header]
 
                 header = ",".join(header)
-                print(file)
-                print(header)
 
                 # print(",".join(lines[1].split(",")[1:]))
 

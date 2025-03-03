@@ -33,6 +33,7 @@ from datetime import date, datetime
 from re import sub
 
 import pandas as pd
+import pyarrow.csv as pv
 from django.http import HttpResponse
 from django.views.decorators.http import require_GET
 
@@ -89,7 +90,7 @@ def process_file(file_path, start_date, end_date, bounds):
         with open(file_path, "w") as f:
             f.writelines(header_lines)
             # new filtered data
-            df.to_csv(f, index=False, chunksize=100000, engine="pyarrow", header=True)
+            df.to_csv(f, index=False, chunksize=100000, header=True)
         f.close()
 
     # TODO: Log exceptions to log file
@@ -238,14 +239,21 @@ def download_data(request):
                             file.write(f"{l1_header}")
                             file.write(f"{freq},** interpolated 500nm channel **\n")
                             file.write(f"{l2_header}")
-                            file.write(f"{header}")
-                            queryset_dict = query.values(*fieldnames)
+                            file.write(f"{header}\n")
+                            file.close()
 
-                            df = pd.DataFrame.from_records(queryset_dict)
+                        queryset_dict = query.values(*fieldnames)
+                        df = pd.DataFrame(queryset_dict)
 
-                            print(df)
-                            with open(file_path, "a", newline="") as file:
-                                df.to_csv(file, index=False, header=True)
+                        with open(file_path, "a", newline="") as file:
+                            df.to_csv(
+                                file,
+                                index=False,
+                                chunksize=100000,
+                                header=False,
+                                encoding="utf-8",
+                            )
+                        file.close()
     try:
         keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
         for policy_file in keep_files:
