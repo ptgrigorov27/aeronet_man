@@ -35,6 +35,7 @@ def correct_date(value):
 
 
 def process(file, design_type):
+    print(f"attempting to add {file}\n")
     try:
         with transaction.atomic():
             with open(file, "r") as csvfile:
@@ -57,6 +58,7 @@ def process(file, design_type):
                 elif design_type == "aod_series":
                     for row in reader:
                         process_aod_series(row)
+                print(f"added {file}\n")
             connections.close_all()
         return True
 
@@ -65,6 +67,7 @@ def process(file, design_type):
             log_file.write(
                 f"FILE: {file}\n TYPE: {design_type}\n ISSUE: {e}\n DATA:\n{row}\n\n"
             )
+        print(f"did not add {file}\n")
         return False
 
 
