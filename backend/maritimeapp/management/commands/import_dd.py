@@ -36,29 +36,29 @@ def correct_date(value):
 
 def process(file, design_type):
     try:
-        # with transaction.atomic():
-        with open(file, "r") as csvfile:
-            reader = csv.DictReader(csvfile)
-            if design_type == "sda_daily":
-                for row in reader:
-                    process_sda_daily(row)
-            elif design_type == "sda_series":
-                for row in reader:
-                    process_sda_series(row)
-            elif design_type == "sda_points":
-                for row in reader:
-                    process_sda_points(row)
-            elif design_type == "aod_daily":
-                for row in reader:
-                    process_aod_daily(row)
-            elif design_type == "aod_points":
-                for row in reader:
-                    process_aod_points(row)
-            elif design_type == "aod_series":
-                for row in reader:
-                    process_aod_series(row)
-            csvfile.close()
-        return True
+        with transaction.atomic():
+            with open(file, "r") as csvfile:
+                reader = csv.DictReader(csvfile)
+                if design_type == "sda_daily":
+                    for row in reader:
+                        process_sda_daily(row)
+                elif design_type == "sda_series":
+                    for row in reader:
+                        process_sda_series(row)
+                elif design_type == "sda_points":
+                    for row in reader:
+                        process_sda_points(row)
+                elif design_type == "aod_daily":
+                    for row in reader:
+                        process_aod_daily(row)
+                elif design_type == "aod_points":
+                    for row in reader:
+                        process_aod_points(row)
+                elif design_type == "aod_series":
+                    for row in reader:
+                        process_aod_series(row)
+                csvfile.close()
+            return True
 
     except Exception as e:
 
