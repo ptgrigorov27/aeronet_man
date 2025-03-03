@@ -10,9 +10,8 @@ import requests
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand
 from django.db.models import Max, Min
-from rest_framework.exceptions import ValidationError
-
 from maritimeapp.models import *
+from rest_framework.exceptions import ValidationError
 
 NUM_WORKERS = 5
 
@@ -135,8 +134,49 @@ class Command(BaseCommand):
 
             # TODO: Log to file
             except Exception as e:
+
                 print(row)
                 print(e)
+                try:
+                          model.objects.get_or_create(
+                    site=site_obj,
+                    filename=full_file_name,
+                    date=date,
+                    time=row["Time(hh:mm:ss)"],
+                    air_mass=float(row["Air Mass"]),
+                    coordinates=latlng,
+                    aod_340nm=float(row["AOD_340nm"]),
+                    aod_380nm=float(row["AOD_380nm"]),
+                    aod_440nm=float(row["AOD_440nm"]),
+                    aod_500nm=float(row["AOD_500nm(int)"]),
+                    aod_675nm=float(row["AOD_675nm"]),
+                    aod_870nm=float(row["AOD_870nm"]),
+                    aod_1020nm=float(row["AOD_1020nm"]),
+                    aod_1640nm=float(row["AOD_1640nm"]),
+                    water_vapor=float(row["Water Vapor(cm)"]),
+                    angstrom_exponent_440_870=float(row["440-870nm_Angstrom_Exponent"]),
+                    std_340nm=float(row["STD_340nm"]),
+                    std_380nm=float(row["STD_380nm"]),
+                    std_440nm=float(row["STD_440nm"]),
+                    std_500nm=float(row["STD_500nm(int)"]),
+                    std_675nm=float(row["STD_675nm"]),
+                    std_870nm=float(row["STD_870nm"]),
+                    std_1020nm=float(row["STD_1020nm"]),
+                    std_1640nm=float(row["STD_1640nm"]),
+                    std_water_vapor=float(row["STD_Water_Vapor(cm)"]),
+                    std_angstrom_exponent_440_870=float(
+                        row["STD_440-870nm_Angstrom_Exponent"]
+                    ),
+                    num_observations=int(row["Number_of_Observations"]),
+                    last_processing_date=last_processing_date,
+                    aeronet_number=int(row["AERONET_Number"]),
+                    microtops_number=int(row["Microtops_Number"]),
+                )
+            except:
+                pass
+
+
+
 
     def process_file(self, args):
         member = args[0]
