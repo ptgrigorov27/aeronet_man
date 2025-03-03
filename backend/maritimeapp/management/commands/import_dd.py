@@ -11,7 +11,7 @@ from multiprocessing import Pool
 import pandas as pd
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import connections, transaction
 from maritimeapp.models import *
 
 download_folder_path = os.path.join(".", "src")
@@ -36,32 +36,31 @@ def correct_date(value):
 
 def process(file, design_type):
     try:
-        # with transaction.atomic():
-        with open(file, "r") as csvfile:
-            reader = csv.DictReader(csvfile)
-            if design_type == "sda_daily":
-                for row in reader:
-                    process_sda_daily(row)
-            elif design_type == "sda_series":
-                for row in reader:
-                    process_sda_series(row)
-            elif design_type == "sda_points":
-                for row in reader:
-                    process_sda_points(row)
-            elif design_type == "aod_daily":
-                for row in reader:
-                    process_aod_daily(row)
-            elif design_type == "aod_points":
-                for row in reader:
-                    process_aod_points(row)
-            elif design_type == "aod_series":
-                for row in reader:
-                    process_aod_series(row)
-            csvfile.close()
+        with transaction.atomic():
+            with open(file, "r") as csvfile:
+                reader = csv.DictReader(csvfile)
+                if design_type == "sda_daily":
+                    for row in reader:
+                        process_sda_daily(row)
+                elif design_type == "sda_series":
+                    for row in reader:
+                        process_sda_series(row)
+                elif design_type == "sda_points":
+                    for row in reader:
+                        process_sda_points(row)
+                elif design_type == "aod_daily":
+                    for row in reader:
+                        process_aod_daily(row)
+                elif design_type == "aod_points":
+                    for row in reader:
+                        process_aod_points(row)
+                elif design_type == "aod_series":
+                    for row in reader:
+                        process_aod_series(row)
+            connections.close_all()
         return True
 
     except Exception as e:
-
         with open(log_filename, "a") as log_file:
             log_file.write(
                 f"FILE: {file}\n TYPE: {design_type}\n ISSUE: {e}\n DATA:\n{row}\n\n"
