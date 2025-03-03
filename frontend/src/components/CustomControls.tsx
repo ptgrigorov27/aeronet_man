@@ -54,7 +54,7 @@ const CustomControls: React.FC = () => {
         div.innerHTML = `
           <a href="https://github.com/rell/aeronet_man" target="_blank" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.7); padding: 5px; border-radius: 0px;">
             <img src="https://www.openmoji.org/data/color/svg/1F6DF.svg" alt="GitHub" style="width: auto; height: 20px; margin-right: 8px;">
-            <strong>Project Repo</strong>
+            <strong>Repository</strong>
           </a>
         `;
         div.style.marginBottom = "5px";
