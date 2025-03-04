@@ -44,6 +44,7 @@ dask = "*"
 distributed = "*"
 gunicorn = "*"
 pyarrow = "*"
+geopandas = "*"
 
 [dev-packages]
 

@@ -12,7 +12,6 @@ import pandas as pd
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand
 from django.db import connections, transaction
-
 from maritimeapp.models import *
 
 download_folder_path = os.path.join(".", "src")
@@ -52,7 +51,7 @@ def process(file, design_type):
                 elif design_type == "sda_daily":
                     process_sda_daily(reader)
                 elif design_type == "aod_daily":
-                    process_aod_daily(row)
+                    process_aod_daily(reader)
                 print(f"added {file}\n")
         return True
 
@@ -72,10 +71,14 @@ def bulk_get_or_create(model, data):
         date_DD_MM_YYYY__in=[item["date_DD_MM_YYYY"] for item in data],
         time_HH_MM_SS__in=[item["time_HH_MM_SS"] for item in data],
     )
+
+    print("Number of existing objects:", len(existing_objects))
+
     existing_keys = set(
         (obj.cruise, obj.level, obj.date_DD_MM_YYYY, obj.time_HH_MM_SS)
         for obj in existing_objects
     )
+
     new_objects = [
         model(**item)
         for item in data
@@ -87,8 +90,14 @@ def bulk_get_or_create(model, data):
         )
         not in existing_keys
     ]
-    print("")
-    model.objects.bulk_create(new_objects)
+
+    print("Number of new objects to create:", len(new_objects))
+
+    if new_objects:
+        model.objects.bulk_create(new_objects)
+        print("New objects created successfully")
+    else:
+        print("No new objects to create")
 
 
 def process_sda_daily(reader):
@@ -270,35 +279,35 @@ def process_sda_series(reader):
                 "STDEV-CoarseModeFraction_500nm(1_eta)"
             ],
             "stdev_regression_dtau_a": row[
-                "stdev-2nd_order_reg_fit_error_total_aod_500nm(regression_dtau_a)"
+                "STDEV-2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
             ],
             "stdev_rmse_fine_mode_aod_500nm": row[
-                "stdev-rmse_fine_mode_aod_500nm(dtau_f)"
+                "STDEV-RMSE_Fine_Mode_AOD_500nm(Dtau_f)"
             ],
             "stdev_rmse_coarse_mode_aod_500nm": row[
-                "stdev-rmse_coarse_mode_aod_500nm(dtau_c)"
+                "STDEV-RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"
             ],
             "stdev_rmse_fmf_and_cmf_fractions_500nm": row[
-                "stdev-rmse_fmf_and_cmf_fractions_500nm(deta)"
+                "STDEV-RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
             ],
             "stdev_angstrom_exponent_total_500nm": row[
-                "stdev-angstrom_exponent(ae)_total_500nm(alpha)"
+                "STDEV-Angstrom_Exponent(AE)_Total_500nm(alpha)"
             ],
             "stdev_dae_dln_wavelength_total_500nm": row[
-                "stdev-dae/dln(wavelength)_total_500nm(alphap)"
+                "STDEV-dAE/dln(wavelength)_Total_500nm(alphap)"
             ],
-            "stdev_ae_fine_mode_500nm": row["stdev-ae_fine_mode_500nm(alpha_f)"],
+            "stdev_ae_fine_mode_500nm": row["STDEV-AE_Fine_Mode_500nm(alpha_f)"],
             "stdev_dae_dln_wavelength_fine_mode_500nm": row[
-                "stdev-dae/dln(wavelength)_fine_mode_500nm(alphap_f)"
+                "STDEV-dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
             ],
-            "stdev_aod_870nm": row["stdev-870nm_input_aod"],
-            "stdev_aod_675nm": row["stdev-675nm_input_aod"],
-            "stdev_aod_500nm": row["stdev-500nm_input_aod"],
-            "stdev_aod_440nm": row["stdev-440nm_input_aod"],
-            "stdev_aod_380nm": row["stdev-380nm_input_aod"],
-            "number_of_observations": row["number_of_observations"],
-            "last_processing_date_dd_mm_yyyy": correct_date(
-                row["last_processing_date(dd:mm:yyyy)"]
+            "stdev_aod_870nm": row["STDEV-870nm_Input_AOD"],
+            "stdev_aod_675nm": row["STDEV-675nm_Input_AOD"],
+            "stdev_aod_500nm": row["STDEV-500nm_Input_AOD"],
+            "stdev_aod_440nm": row["STDEV-440nm_Input_AOD"],
+            "stdev_aod_380nm": row["STDEV-380nm_Input_AOD"],
+            "number_of_observations": row["Number_of_Observations"],
+            "last_processing_date_DD_MM_YYYY": correct_date(
+                row["Last_Processing_Date(dd:mm:yyyy)"]
             ),
             "aeronet_number": row["AERONET_Number"],
             "microtops_number": row["Microtops_Number"],
@@ -514,7 +523,6 @@ class Command(BaseCommand):
         sda_daily = os.path.join(".", "src_csvs", "*daily_SDA_*.csv")
         csvs = glob.glob(sda_daily)
         process_group(csvs, "sda_daily")
-        #
 
     def csv(self):
         files_csv = glob.glob("./src_csvs/*")
@@ -601,7 +609,6 @@ class Command(BaseCommand):
         files.append(get_single_match(csv_dir, "*all_points.ONEILL_10"))
         files.append(get_single_match(csv_dir, "*all_points.ONEILL_15"))
         files.append(get_single_match(csv_dir, "*all_points.ONEILL_20"))
-        # print(files)
 
         def addHeadToDB(file):
             level = 0

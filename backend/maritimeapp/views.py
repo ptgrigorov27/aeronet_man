@@ -32,10 +32,19 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import date, datetime
 from re import sub
 
+import numpy as np
 import pandas as pd
-import pyarrow.csv as pv
+import pyarrow as pa
+import pyarrow.csv as csv
+from django.contrib.gis.geos import Point
 from django.http import HttpResponse
 from django.views.decorators.http import require_GET
+
+
+def point_to_wkt(point):
+    if isinstance(point, Point):
+        return point.wkt  # Convert to Well-Known Text format
+    return point
 
 
 def process_file(file_path, start_date, end_date, bounds):
@@ -98,7 +107,6 @@ def process_file(file_path, start_date, end_date, bounds):
         print(f"Error processing file {file_path}: {e}")
 
 
-import csv
 # ----- Download #TODO: Swap to database downlaod instead of file creation
 import json
 import os
@@ -109,6 +117,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
+import geopandas as gpd
 import pyarrow.csv as pv
 from django.contrib.gis.geos import Point, Polygon
 from django.http import HttpResponse, JsonResponse
@@ -244,15 +253,19 @@ def download_data(request):
 
                         queryset_dict = query.values(*fieldnames)
                         df = pd.DataFrame(queryset_dict)
+                        # for field in fieldnames:
+                        #     if df[field].dtype == object and isinstance(
+                        #         df[field].iloc[0], Point
+                        #     ):
+                        #         df[field] = df[field].apply(point_to_wkt)
 
-                        with open(file_path, "a", newline="") as file:
+                        # table = pa.Table.from_pandas(df)
+                        # numpy_array = df.to_numpy()
+                        with open(file_path, "a") as file:
                             df.to_csv(
-                                file,
-                                index=False,
-                                chunksize=100000,
-                                header=False,
-                                encoding="utf-8",
+                                file, header=False, index=False, chunksize=1000000
                             )
+
                         file.close()
     try:
         keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
@@ -465,9 +478,6 @@ def site_measurements(request):
         queryset.values(
             "site", "filename", "date", "time", "coordinates", "aeronet_number", aod_key
         )
-        # queryset.exclude(**{aod_key: -999}).values(
-        #     "site", "filename", "date", "time", "coordinates", "aeronet_number", aod_key
-        # )
     )
 
     for measurement in measurements:
