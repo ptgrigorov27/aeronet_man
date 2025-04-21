@@ -115,13 +115,10 @@ const SidePanel: React.FC = () => {
   }, [showNotification]);
 
   useEffect(() => {
-   if(map)
-     {
-      startSeleted(); 
-     }
-  }, [map])
-  
-
+    if (map) {
+      startSeleted();
+    }
+  }, [map]);
 
   {
     /* handle download */
@@ -147,9 +144,9 @@ const SidePanel: React.FC = () => {
     setShowModal(true);
   };
 
- const startSeleted = () => {
-   let sites = new Set<string>();
-   const fetchSites = async () => {
+  const startSeleted = () => {
+    let sites = new Set<string>();
+    const fetchSites = async () => {
       try {
         const params = new URLSearchParams();
         if (startDate) params.append("start_date", startDate);
@@ -170,7 +167,7 @@ const SidePanel: React.FC = () => {
           `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
         );
         const returned: SiteSelect[] = await response.json();
-        setSelectedSites(new Set<string>(returned.map((site) => site.name )));
+        setSelectedSites(new Set<string>(returned.map((site) => site.name)));
       } catch (error) {
         console.error("Error fetching sites:", error);
       }
@@ -181,8 +178,7 @@ const SidePanel: React.FC = () => {
     setTimeout(() => {
       setIsSet(false);
     }, 100);
-
- };
+  };
 
   const updateType = () => {
     setTypeChange(true);
@@ -260,7 +256,7 @@ const SidePanel: React.FC = () => {
         : null;
       let filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
       if (filename.charAt(filename.length - 1) === "_") {
-         filename = filename.slice(0, -1);
+        filename = filename.slice(0, -1);
       }
 
       const blob = await response.blob();
@@ -276,7 +272,6 @@ const SidePanel: React.FC = () => {
     } catch (error) {
       console.error("Error during download:", error);
     } finally {
-    
       setShowNotification(true);
       setTimeout(() => {
         setShowNotification(false);
@@ -376,10 +371,10 @@ const SidePanel: React.FC = () => {
         const ne = bounds.getNorthEast();
 
         // Out of bounds correction
-        const minLat = Math.max(-90, Math.min(90, sw.lat));
-        const minLng = Math.max(-180, Math.min(180, sw.lng));
-        const maxLat = Math.max(-90, Math.min(90, ne.lat));
-        const maxLng = Math.max(-180, Math.min(180, ne.lng));
+        const minLat = Math.max(-90, Math.min(90, sw.lat.toPrecision(6)));
+        const minLng = Math.max(-180, Math.min(180, sw.lng.toPrecision(6)));
+        const maxLat = Math.max(-90, Math.min(90, ne.lat.toPrecision(6)));
+        const maxLng = Math.max(-180, Math.min(180, ne.lng.toPrecision(6)));
 
         const correctedBounds = L.latLngBounds(
           L.latLng(minLat, minLng),
@@ -542,7 +537,7 @@ const SidePanel: React.FC = () => {
       )}
       <Card className={styles.sidePanel}>
         <Card.Body>
-          <Card.Title>Map Controls</Card.Title>
+          <Card.Title></Card.Title>
           <div className={styles.buttonGroup}>
             <div className={styles.sliderContainer}>
               <input
@@ -558,7 +553,7 @@ const SidePanel: React.FC = () => {
             </div>
             <Button
               variant="warning"
-              onClick={() => map && map.setView([0, 0], 2)}
+              onClick={() => map && map.setView([0, 0], 2) && setMarkerSize(2 + (Math.E - 1))}
             >
               Reset View
             </Button>
@@ -648,7 +643,7 @@ const SidePanel: React.FC = () => {
           )}
 
           <hr className={styles.separator} />
-          <Card.Title>Configuration</Card.Title>
+          <Card.Title></Card.Title>
           <div className={styles.buttonGroup}>
             <Button variant="secondary" onClick={handleToggleModal}>
               Cruise Selection

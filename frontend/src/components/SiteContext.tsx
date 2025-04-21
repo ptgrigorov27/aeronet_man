@@ -13,6 +13,8 @@ interface Site {
   span_date: string;
 }
 
+
+
 interface SiteContextType {
   sites: Site[];
   refreshSites: () => void;

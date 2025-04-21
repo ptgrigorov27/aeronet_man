@@ -1,19 +1,27 @@
 import csv
 import datetime
 import glob
+import io
 import os
 import re
 import subprocess
+import tarfile
 from datetime import datetime
 from functools import partial
 from multiprocessing import Pool
+from time import sleep
 
 import pandas as pd
+import requests
 from django.contrib.gis.geos import Point
 from django.core.management.base import BaseCommand
 from django.db import connections, transaction
+
 from maritimeapp.models import *
 
+download_folder_path = os.path.join(".", "src")
+csv_dir = os.path.join(".", "src_csvs")
+number_of_files = 0
 download_folder_path = os.path.join(".", "src")
 csv_dir = os.path.join(".", "src_csvs")
 number_of_files = 0
@@ -34,414 +42,11 @@ def correct_date(value):
         print("debug value err")
 
 
-def process(file, design_type):
-    print(f"attempting to add {file}\n")
-    try:
-        with transaction.atomic():
-            with open(file, "r") as csvfile:
-                reader = csv.DictReader(csvfile)
-                if design_type == "sda_points":
-                    process_sda_points(reader)
-                elif design_type == "aod_points":
-                    process_aod_points(reader)
-                elif design_type == "sda_series":
-                    process_sda_series(reader)
-                elif design_type == "aod_series":
-                    process_aod_series(reader)
-                elif design_type == "sda_daily":
-                    process_sda_daily(reader)
-                elif design_type == "aod_daily":
-                    process_aod_daily(reader)
-                print(f"added {file}\n")
-        return True
-
-    except Exception as e:
-        with open(log_filename, "a") as log_file:
-            log_file.write(
-                f"FILE: {file}\n TYPE: {design_type}\n ISSUE: {e}\n DATA:\n{reader}\n\n"
-            )
-        print(f"did not add {file}\n")
-        return False
-
-
-def bulk_get_or_create(model, data):
-    existing_objects = model.objects.filter(
-        cruise__in=[item["cruise"] for item in data],
-        level__in=[item["level"] for item in data],
-        date_DD_MM_YYYY__in=[item["date_DD_MM_YYYY"] for item in data],
-        time_HH_MM_SS__in=[item["time_HH_MM_SS"] for item in data],
-    )
-
-    print("Number of existing objects:", len(existing_objects))
-
-    existing_keys = set(
-        (obj.cruise, obj.level, obj.date_DD_MM_YYYY, obj.time_HH_MM_SS)
-        for obj in existing_objects
-    )
-
-    new_objects = [
-        model(**item)
-        for item in data
-        if (
-            item["cruise"],
-            item["level"],
-            item["date_DD_MM_YYYY"],
-            item["time_HH_MM_SS"],
-        )
-        not in existing_keys
-    ]
-
-    print("Number of new objects to create:", len(new_objects))
-
-    if new_objects:
-        model.objects.bulk_create(new_objects)
-        print("New objects created successfully")
-    else:
-        print("No new objects to create")
-
-
-def process_sda_daily(reader):
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "julian_day": row["Julian_Day"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "total_aod_500nm": row["Total_AOD_500nm(tau_a)"],
-            "fine_mode_aod_500nm": row["Fine_Mode_AOD_500nm(tau_f)"],
-            "coarse_mode_aod_500nm": row["Coarse_Mode_AOD_500nm(tau_c)"],
-            "fine_mode_fraction_500nm": row["FineModeFraction_500nm(eta)"],
-            "coarse_mode_fraction_500nm": row["CoarseModeFraction_500nm(1_eta)"],
-            "regression_dtau_a": row[
-                "2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
-            ],
-            "rmse_fine_mode_aod_500nm": row["RMSE_Fine_Mode_AOD_500nm(Dtau_f)"],
-            "rmse_coarse_mode_aod_500nm": row["RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"],
-            "rmse_fmf_and_cmf_fractions_500nm": row[
-                "RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
-            ],
-            "angstrom_exponent_total_500nm": row[
-                "Angstrom_Exponent(AE)_Total_500nm(alpha)"
-            ],
-            "dae_dln_wavelength_total_500nm": row[
-                "dAE/dln(wavelength)_Total_500nm(alphap)"
-            ],
-            "ae_fine_mode_500nm": row["AE_Fine_Mode_500nm(alpha_f)"],
-            "dae_dln_wavelength_fine_mode_500nm": row[
-                "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
-            ],
-            "aod_870nm": row["870nm_Input_AOD"],
-            "aod_675nm": row["675nm_Input_AOD"],
-            "aod_500nm": float(row["500nm_Input_AOD"]),
-            "aod_440nm": row["440nm_Input_AOD"],
-            "aod_380nm": row["380nm_Input_AOD"],
-            "stdev_total_aod_500nm": row["STDEV-Total_AOD_500nm(tau_a)"],
-            "stdev_fine_mode_aod_500nm": row["STDEV-Fine_Mode_AOD_500nm(tau_f)"],
-            "stdev_coarse_mode_aod_500nm": row["STDEV-Coarse_Mode_AOD_500nm(tau_c)"],
-            "stdev_fine_mode_fraction_500nm": row["STDEV-FineModeFraction_500nm(eta)"],
-            "stdev_coarse_mode_fraction_500nm": row[
-                "STDEV-CoarseModeFraction_500nm(1_eta)"
-            ],
-            "stdev_regression_dtau_a": row[
-                "STDEV-2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
-            ],
-            "stdev_rmse_fine_mode_aod_500nm": row[
-                "STDEV-RMSE_Fine_Mode_AOD_500nm(Dtau_f)"
-            ],
-            "stdev_rmse_coarse_mode_aod_500nm": row[
-                "STDEV-RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"
-            ],
-            "stdev_rmse_fmf_and_cmf_fractions_500nm": row[
-                "STDEV-RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
-            ],
-            "stdev_angstrom_exponent_total_500nm": row[
-                "STDEV-Angstrom_Exponent(AE)_Total_500nm(alpha)"
-            ],
-            "stdev_dae_dln_wavelength_total_500nm": row[
-                "STDEV-dAE/dln(wavelength)_Total_500nm(alphap)"
-            ],
-            "stdev_ae_fine_mode_500nm": row["STDEV-AE_Fine_Mode_500nm(alpha_f)"],
-            "stdev_dae_dln_wavelength_fine_mode_500nm": row[
-                "STDEV-dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
-            ],
-            "stdev_aod_870nm": row["STDEV-870nm_Input_AOD"],
-            "stdev_aod_675nm": row["STDEV-675nm_Input_AOD"],
-            "stdev_aod_500nm": row["STDEV-500nm_Input_AOD"],
-            "stdev_aod_440nm": row["STDEV-440nm_Input_AOD"],
-            "stdev_aod_380nm": row["STDEV-380nm_Input_AOD"],
-            "number_of_observations": row["Number_of_Observations"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-    bulk_get_or_create(DownloadSDADaily, data)
-
-
-def process_sda_points(reader):
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "julian_day": row["Julian_Day"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "total_aod_500nm": row["Total_AOD_500nm(tau_a)"],
-            "fine_mode_aod_500nm": row["Fine_Mode_AOD_500nm(tau_f)"],
-            "coarse_mode_aod_500nm": row["Coarse_Mode_AOD_500nm(tau_c)"],
-            "fine_mode_fraction_500nm": row["FineModeFraction_500nm(eta)"],
-            "coarse_mode_fraction_500nm": row["CoarseModeFraction_500nm(1_eta)"],
-            "regression_dtau_a": row[
-                "2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
-            ],
-            "rmse_fine_mode_aod_500nm": row["RMSE_Fine_Mode_AOD_500nm(Dtau_f)"],
-            "rmse_coarse_mode_aod_500nm": row["RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"],
-            "rmse_fmf_and_cmf_fractions_500nm": row[
-                "RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
-            ],
-            "angstrom_exponent_total_500nm": row[
-                "Angstrom_Exponent(AE)_Total_500nm(alpha)"
-            ],
-            "dae_dln_wavelength_total_500nm": row[
-                "dAE/dln(wavelength)_Total_500nm(alphap)"
-            ],
-            "ae_fine_mode_500nm": row["AE_Fine_Mode_500nm(alpha_f)"],
-            "dae_dln_wavelength_fine_mode_500nm": row[
-                "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
-            ],
-            "aod_870nm": row["870nm_Input_AOD"],
-            "aod_675nm": row["675nm_Input_AOD"],
-            "aod_500nm": float(row["500nm_Input_AOD"]),
-            "aod_440nm": row["440nm_Input_AOD"],
-            "aod_380nm": row["380nm_Input_AOD"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-
-    bulk_get_or_create(DownloadSDAAP, data)
-
-
-def process_sda_series(reader):
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "julian_day": row["Julian_Day"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "total_aod_500nm": row["Total_AOD_500nm(tau_a)"],
-            "fine_mode_aod_500nm": row["Fine_Mode_AOD_500nm(tau_f)"],
-            "coarse_mode_aod_500nm": row["Coarse_Mode_AOD_500nm(tau_c)"],
-            "fine_mode_fraction_500nm": row["FineModeFraction_500nm(eta)"],
-            "coarse_mode_fraction_500nm": row["CoarseModeFraction_500nm(1_eta)"],
-            "regression_dtau_a": row[
-                "2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
-            ],
-            "rmse_fine_mode_aod_500nm": row["RMSE_Fine_Mode_AOD_500nm(Dtau_f)"],
-            "rmse_coarse_mode_aod_500nm": row["RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"],
-            "rmse_fmf_and_cmf_fractions_500nm": row[
-                "RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
-            ],
-            "angstrom_exponent_total_500nm": row[
-                "Angstrom_Exponent(AE)_Total_500nm(alpha)"
-            ],
-            "dae_dln_wavelength_total_500nm": row[
-                "dAE/dln(wavelength)_Total_500nm(alphap)"
-            ],
-            "ae_fine_mode_500nm": row["AE_Fine_Mode_500nm(alpha_f)"],
-            "dae_dln_wavelength_fine_mode_500nm": row[
-                "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
-            ],
-            "aod_870nm": row["870nm_Input_AOD"],
-            "aod_675nm": row["675nm_Input_AOD"],
-            "aod_500nm": float(row["500nm_Input_AOD"]),
-            "aod_440nm": row["440nm_Input_AOD"],
-            "aod_380nm": row["380nm_Input_AOD"],
-            "stdev_total_aod_500nm": row["STDEV-Total_AOD_500nm(tau_a)"],
-            "stdev_fine_mode_aod_500nm": row["STDEV-Fine_Mode_AOD_500nm(tau_f)"],
-            "stdev_coarse_mode_aod_500nm": row["STDEV-Coarse_Mode_AOD_500nm(tau_c)"],
-            "stdev_fine_mode_fraction_500nm": row["STDEV-FineModeFraction_500nm(eta)"],
-            "stdev_coarse_mode_fraction_500nm": row[
-                "STDEV-CoarseModeFraction_500nm(1_eta)"
-            ],
-            "stdev_regression_dtau_a": row[
-                "STDEV-2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)"
-            ],
-            "stdev_rmse_fine_mode_aod_500nm": row[
-                "STDEV-RMSE_Fine_Mode_AOD_500nm(Dtau_f)"
-            ],
-            "stdev_rmse_coarse_mode_aod_500nm": row[
-                "STDEV-RMSE_Coarse_Mode_AOD_500nm(Dtau_c)"
-            ],
-            "stdev_rmse_fmf_and_cmf_fractions_500nm": row[
-                "STDEV-RMSE_FMF_and_CMF_Fractions_500nm(Deta)"
-            ],
-            "stdev_angstrom_exponent_total_500nm": row[
-                "STDEV-Angstrom_Exponent(AE)_Total_500nm(alpha)"
-            ],
-            "stdev_dae_dln_wavelength_total_500nm": row[
-                "STDEV-dAE/dln(wavelength)_Total_500nm(alphap)"
-            ],
-            "stdev_ae_fine_mode_500nm": row["STDEV-AE_Fine_Mode_500nm(alpha_f)"],
-            "stdev_dae_dln_wavelength_fine_mode_500nm": row[
-                "STDEV-dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)"
-            ],
-            "stdev_aod_870nm": row["STDEV-870nm_Input_AOD"],
-            "stdev_aod_675nm": row["STDEV-675nm_Input_AOD"],
-            "stdev_aod_500nm": row["STDEV-500nm_Input_AOD"],
-            "stdev_aod_440nm": row["STDEV-440nm_Input_AOD"],
-            "stdev_aod_380nm": row["STDEV-380nm_Input_AOD"],
-            "number_of_observations": row["Number_of_Observations"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-    bulk_get_or_create(DownloadSDASeries, data)
-
-
-def process_aod_daily(reader):
-
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "air_mass": row["Air Mass"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "aod_340nm": row["AOD_340nm"],
-            "aod_380nm": row["AOD_380nm"],
-            "aod_440nm": row["AOD_440nm"],
-            "aod_500nm": row["AOD_500nm"],
-            "aod_675nm": row["AOD_675nm"],
-            "aod_870nm": row["AOD_870nm"],
-            "aod_1020nm": row["AOD_1020nm"],
-            "aod_1640nm": row["AOD_1640nm"],
-            "water_vapor_CM": row["Water Vapor(cm)"],
-            "angstrom_exponent_440_870": row["440-870nm_Angstrom_Exponent"],
-            "std_340nm": row["STD_340nm"],
-            "std_380nm": row["STD_380nm"],
-            "std_440nm": row["STD_440nm"],
-            "std_500nm": row["STD_500nm"],
-            "std_675nm": row["STD_675nm"],
-            "std_870nm": row["STD_870nm"],
-            "std_1020nm": row["STD_1020nm"],
-            "std_1640nm": row["STD_1640nm"],
-            "std_water_vapor_CM": row["STD_Water_Vapor(cm)"],
-            "std_angstrom_exponent_440_870": row["STD_440-870nm_Angstrom_Exponent"],
-            "number_of_observations": row["Number_of_Observations"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-    bulk_get_or_create(DownloadAODDaily, data)
-
-
-def process_aod_points(reader):
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "air_mass": row["Air Mass"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "aod_340nm": row["AOD_340nm"],
-            "aod_380nm": row["AOD_380nm"],
-            "aod_440nm": row["AOD_440nm"],
-            "aod_500nm": row["AOD_500nm"],
-            "aod_675nm": row["AOD_675nm"],
-            "aod_870nm": row["AOD_870nm"],
-            "aod_1020nm": row["AOD_1020nm"],
-            "aod_1640nm": row["AOD_1640nm"],
-            "water_vapor_CM": row["Water Vapor(cm)"],
-            "angstrom_exponent_440_870": row["440-870nm_Angstrom_Exponent"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-    bulk_get_or_create(DownloadAODAP, data)
-
-
-def process_aod_series(reader):
-    data = [
-        {
-            "date_DD_MM_YYYY": correct_date(row["Date(dd:mm:yyyy)"]),
-            "time_HH_MM_SS": row["Time(hh:mm:ss)"],
-            "air_mass": row["Air Mass"],
-            "coordinates": Point(float(row["Longitude"]), float(row["Latitude"])),
-            "aod_340nm": row["AOD_340nm"],
-            "aod_380nm": row["AOD_380nm"],
-            "aod_440nm": row["AOD_440nm"],
-            "aod_500nm": row["AOD_500nm"],
-            "aod_675nm": row["AOD_675nm"],
-            "aod_870nm": row["AOD_870nm"],
-            "aod_1020nm": row["AOD_1020nm"],
-            "aod_1640nm": row["AOD_1640nm"],
-            "water_vapor_CM": row["Water Vapor(cm)"],
-            "angstrom_exponent_440_870": row["440-870nm_Angstrom_Exponent"],
-            "std_340nm": row["STD_340nm"],
-            "std_380nm": row["STD_380nm"],
-            "std_440nm": row["STD_440nm"],
-            "std_500nm": row["STD_500nm"],
-            "std_675nm": row["STD_675nm"],
-            "std_870nm": row["STD_870nm"],
-            "std_1020nm": row["STD_1020nm"],
-            "std_1640nm": row["STD_1640nm"],
-            "std_water_vapor_CM": row["STD_Water_Vapor(cm)"],
-            "std_angstrom_exponent_440_870": row["STD_440-870nm_Angstrom_Exponent"],
-            "number_of_observations": row["Number_of_Observations"],
-            "last_processing_date_DD_MM_YYYY": correct_date(
-                row["Last_Processing_Date(dd:mm:yyyy)"]
-            ),
-            "aeronet_number": row["AERONET_Number"],
-            "microtops_number": row["Microtops_Number"],
-            "cruise": row["cruise"],
-            "level": row["level"],
-            "pi": row["pi"],
-            "pi_email": row["pi_email"],
-        }
-        for row in reader
-    ]
-    bulk_get_or_create(DownloadAODSeries, data)
-
-
 class Command(BaseCommand):
     help = "Migrate man data tar to database."
+
+    site_cols = ["name", "aeronet_number", "description", "span_date"]
+    site_df = pd.DataFrame(columns=site_cols)
 
     @classmethod
     def setup(self):
@@ -460,7 +65,6 @@ class Command(BaseCommand):
                 return
 
             tar_contents = response.content
-
             with tarfile.open(fileobj=io.BytesIO(tar_contents), mode="r:gz") as tar:
                 tar.extractall(path=download_folder_path)
             print(
@@ -474,58 +78,86 @@ class Command(BaseCommand):
         subprocess.run(["cp", "-fr"] + to_be_csv_files + [csv_dir], check=True)
         print(f"Folders copied to csv_directory moving to processing.")
 
-    def push_to_db(self):
-        total_success = 0
-        total_bad = 0
-
-        def process_with_tracking(file, design_type):
-            nonlocal total_success, total_bad
-            process(file, design_type, total_success, total_bad)
-            if total_success:
-                total_success += 1
-            else:
-                total_bad += 1
-
-        def process_group(csvs, design_type):
-            total_success = 0
-            total_bad = 0
-
-            with Pool(processes=2) as pool:
-                results = pool.starmap(process, [(file, design_type) for file in csvs])
-
-            for result in results:
-                if result:
-                    total_success += 1
-                else:
-                    total_bad += 1
-            with open(log_filename, "a") as log_file:
-
-                log_file.write(f"RESULTS:\n {results}\n")
-                log_file.write(f"Total readings added: {total_success}")
-                log_file.write(f"Total readings not added: {total_bad}")
-                return results
-
-        sda_points = os.path.join(".", "src_csvs", "*points_SDA_*.csv")
-        csvs = glob.glob(sda_points)
-        process_group(csvs, "sda_points")
-        aod_points = os.path.join(".", "src_csvs", "*points_AOD_*.csv")
-        csvs = glob.glob(aod_points)
-        process_group(csvs, "aod_points")
-        sda_series = os.path.join(".", "src_csvs", "*series_SDA_*.csv")
-        csvs = glob.glob(sda_series)
-        process_group(csvs, "sda_series")
-        aod_daily = os.path.join(".", "src_csvs", "*daily_AOD_*.csv")
-        csvs = glob.glob(aod_daily)
-        process_group(csvs, "aod_daily")
-        aod_series = os.path.join(".", "src_csvs", "*series_AOD_*.csv")
-        csvs = glob.glob(aod_series)
-        process_group(csvs, "aod_series")
-        sda_daily = os.path.join(".", "src_csvs", "*daily_SDA_*.csv")
-        csvs = glob.glob(sda_daily)
-        process_group(csvs, "sda_daily")
-
     def csv(self):
+
         files_csv = glob.glob("./src_csvs/*")
+        aod_dict = {
+            "Date(dd:mm:yyyy)": "date_DD_MM_YYYY",
+            "Time(hh:mm:ss)": "time_HH_MM_SS",
+            "Air Mass": "air_mass",
+            "AOD_340nm": "aod_340nm",
+            "AOD_380nm": "aod_380nm",
+            "AOD_440nm": "aod_440nm",
+            "AOD_500nm": "aod_500nm",
+            "AOD_675nm": "aod_675nm",
+            "AOD_870nm": "aod_870nm",
+            "AOD_1020nm": "aod_1020nm",
+            "AOD_1640nm": "aod_1640nm",
+            "Water Vapor(cm)": "water_vapor_CM",
+            "440-870nm_Angstrom_Exponent": "angstrom_exponent_440_870",
+            "STD_340nm": "std_340nm",
+            "STD_380nm": "std_380nm",
+            "STD_440nm": "std_440nm",
+            "STD_500nm": "std_500nm",
+            "STD_675nm": "std_675nm",
+            "STD_870nm": "std_870nm",
+            "STD_1020nm": "std_1020nm",
+            "STD_1640nm": "std_1640nm",
+            "STD_Water_Vapor(cm)": "std_water_vapor_CM",
+            "STD_440-870nm_Angstrom_Exponent": "std_angstrom_exponent_440_870",
+            "Number_of_Observations": "number_of_observations",
+            "Last_Processing_Date(dd:mm:yyyy)": "last_processing_date_DD_MM_YYYY",
+            "AERONET_Number": "aeronet_number",
+            "Microtops_Number": "microtops_number",
+        }
+
+        sda_dict = {
+            "Date(dd:mm:yyyy)": "date_DD_MM_YYYY",
+            "Time(hh:mm:ss)": "time_HH_MM_SS",
+            "Julian_Day": "julian_day",
+            "Air_Mass": "air_mass",
+            "Total_AOD_500nm(tau_a)": "total_aod_500nm",
+            "Fine_Mode_AOD_500nm(tau_f)": "fine_mode_aod_500nm",
+            "Coarse_Mode_AOD_500nm(tau_c)": "coarse_mode_aod_500nm",
+            "FineModeFraction_500nm(eta)": "fine_mode_fraction_500nm",
+            "CoarseModeFraction_500nm(1_eta)": "coarse_mode_fraction_500nm",
+            "2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)": "regression_dtau_a",
+            "RMSE_Fine_Mode_AOD_500nm(Dtau_f)": "rmse_fine_mode_aod_500nm",
+            "RMSE_Coarse_Mode_AOD_500nm(Dtau_c)": "rmse_coarse_mode_aod_500nm",
+            "RMSE_FMF_and_CMF_Fractions_500nm(Deta)": "rmse_fmf_and_cmf_fractions_500nm",
+            "Angstrom_Exponent(AE)_Total_500nm(alpha)": "angstrom_exponent_total_500nm",
+            "dAE/dln(wavelength)_Total_500nm(alphap)": "dae_dln_wavelength_total_500nm",
+            "AE_Fine_Mode_500nm(alpha_f)": "ae_fine_mode_500nm",
+            "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)": "dae_dln_wavelength_fine_mode_500nm",
+            "870nm_Input_AOD": "aod_870nm",
+            "675nm_Input_AOD": "aod_675nm",
+            "500nm_Input_AOD": "aod_500nm",
+            "440nm_Input_AOD": "aod_440nm",
+            "380nm_Input_AOD": "aod_380nm",
+            "STDEV-Total_AOD_500nm(tau_a)": "stdev_total_aod_500nm",
+            "STDEV-Fine_Mode_AOD_500nm(tau_f)": "stdev_fine_mode_aod_500nm",
+            "STDEV-Coarse_Mode_AOD_500nm(tau_c)": "stdev_coarse_mode_aod_500nm",
+            "STDEV-FineModeFraction_500nm(eta)": "stdev_fine_mode_fraction_500nm",
+            "STDEV-CoarseModeFraction_500nm(1_eta)": "stdev_coarse_mode_fraction_500nm",
+            "STDEV-2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)": "stdev_regression_dtau_a",
+            "STDEV-RMSE_Fine_Mode_AOD_500nm(Dtau_f)": "stdev_rmse_fine_mode_aod_500nm",
+            "STDEV-RMSE_Coarse_Mode_AOD_500nm(Dtau_c)": "stdev_rmse_coarse_mode_aod_500nm",
+            "STDEV-RMSE_FMF_and_CMF_Fractions_500nm(Deta)": "stdev_rmse_fmf_and_cmf_fractions_500nm",
+            "STDEV-Angstrom_Exponent(AE)_Total_500nm(alpha)": "stdev_angstrom_exponent_total_500nm",
+            "STDEV-dAE/dln(wavelength)_Total_500nm(alphap)": "stdev_dae_dln_wavelength_total_500nm",
+            "STDEV-AE_Fine_Mode_500nm(alpha_f)": "stdev_ae_fine_mode_500nm",
+            "STDEV-dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)": "stdev_dae_dln_wavelength_fine_mode_500nm",
+            "STDEV-870nm_Input_AOD": "stdev_aod_870nm",
+            "STDEV-675nm_Input_AOD": "stdev_aod_675nm",
+            "STDEV-500nm_Input_AOD": "stdev_aod_500nm",
+            "Solar_Zenith_Angle": "solar_zenith_angle",
+            "STDEV-440nm_Input_AOD": "stdev_aod_440nm",
+            "STDEV-380nm_Input_AOD": "stdev_aod_380nm",
+            "Number_of_Observations": "number_of_observations",
+            "Last_Processing_Date(dd:mm:yyyy)": "last_processing_date_DD_MM_YYYY",
+            "AERONET_Number": "aeronet_number",
+            "Microtops_Number": "microtops_number",
+        }
 
         def prepare_extract_data(file):
             df = None
@@ -536,7 +168,7 @@ class Command(BaseCommand):
             cruise = None
             lines = None
             outputcsv = None
-            headers = None
+            header = None
 
             try:
                 with open(file, "r", encoding="latin-1") as f:
@@ -560,30 +192,84 @@ class Command(BaseCommand):
                 else:
                     level = file.split(".ONEILL_")[1]
                     outputcsv = "." + file.split(".")[1] + "_SDA_" + level + ".csv"
-                headers = lines[4].strip().split(",")
+                header = lines[4].strip().split(",")
                 reg = re.compile(".*\(int\)")
-                bad_cols = list(filter(reg.match, headers))
+                bad_cols = list(filter(reg.match, header))
                 if bad_cols:
                     for col in bad_cols:
-                        # print(col.replace("(int)", ""))
-                        headers[headers.index(col)] = col.replace("(int)", "")
-                        # print(headers)
+                        header[header.index(col)] = col.replace("(int)", "")
 
+                if "ONEILL_" in file:
+                    translated_cols = [
+                        sda_dict.get(header, header) for header in header
+                    ]
+                else:
+                    translated_cols = [
+                        aod_dict.get(header, header) for header in header
+                    ]
                 data = [line.strip().split(",") for line in lines[5:]]
-                df = pd.DataFrame(data, columns=headers)
+                df = pd.DataFrame(data, columns=header)
+
+                df.columns = translated_cols
+                df["coordinates"] = df.apply(
+                    lambda row: Point(float(row["Longitude"]), float(row["Latitude"])),
+                    axis=1,
+                )
+                df["coordinates_wkt"] = df.apply(
+                    lambda row: Point(float(row["Longitude"]), float(row["Latitude"])),
+                    axis=1,
+                )
+                df = df.drop(columns=["Longitude", "Latitude"])
+                df["date_DD_MM_YYYY"] = df["date_DD_MM_YYYY"].str.replace(
+                    ":", "-", regex=False
+                )
+                df["date_DD_MM_YYYY"] = pd.to_datetime(
+                    df["date_DD_MM_YYYY"], format="%d-%m-%Y", errors="coerce"
+                )
+                df["last_processing_date_DD_MM_YYYY"] = df[
+                    "last_processing_date_DD_MM_YYYY"
+                ].str.replace(":", "-", regex=False)
+                df["last_processing_date_DD_MM_YYYY"] = pd.to_datetime(
+                    df["last_processing_date_DD_MM_YYYY"],
+                    format="%d-%m-%Y",
+                    errors="coerce",
+                )
                 df["cruise"] = cruise
                 df["level"] = level
                 df["pi"] = pi
                 df["pi_email"] = pi_email
                 df.to_csv(outputcsv, index=False)
+
+                if "daily.lev15" in file:
+                    self.site_df = pd.concat(
+                        [
+                            pd.DataFrame(
+                                [
+                                    [
+                                        df.loc[0]["cruise"],
+                                        df.loc[0]["aeronet_number"],
+                                        "?",
+                                        {},
+                                    ]
+                                ],
+                                columns=self.site_cols,
+                            ),
+                            self.site_df,
+                        ],
+                        ignore_index=True,
+                    )
             except Exception as e:
                 with open(log_filename, "a") as log_file:
+                    print("\n\n\n Err")
+                    print(e)
                     log_file.write(f"failed to create csv {cruise} - File: {file})\n")
-                    log_file.write(f"Header: {headers}\n")
+                    log_file.write(f"Header: {header}\n")
+                    # log_file.write(f"new: {df.columns}\n")
                     log_file.write(f"Error: {e}\n\n")
 
         for file in files_csv:
             if os.path.isfile(file) and ".csv" not in file:
+                # print(file)
                 prepare_extract_data(file)
 
         # Process -
@@ -603,7 +289,7 @@ class Command(BaseCommand):
         files.append(get_single_match(csv_dir, "*daily.lev20"))
         files.append(get_single_match(csv_dir, "*daily.ONEILL_15"))
         files.append(get_single_match(csv_dir, "*daily.ONEILL_20"))
-        files.append(get_single_match(csv_dir, "*all_points.lev10*"))
+        files.append(get_single_match(csv_dir, "*all_points.lev10"))
         files.append(get_single_match(csv_dir, "*all_points.lev15"))
         files.append(get_single_match(csv_dir, "*all_points.lev20"))
         files.append(get_single_match(csv_dir, "*all_points.ONEILL_10"))
@@ -632,16 +318,13 @@ class Command(BaseCommand):
                 baseheader_l1 = lines[0]
                 baseheader_l2 = lines[2]
                 header = lines[4]
-                header = header.split(",")
-                header.remove("Latitude")
-                header.remove("Longitude")
+                cols = header.split(",")
+                cols.remove("Latitude")
+                cols.remove("Longitude")
                 new_cols = ["Coordinates", "Cruise", "Level", "PI", "PI_EMAIL\n"]
-                header.extend(new_cols)
-                header = [element.replace("\n", "") for element in header]
-
-                header = ",".join(header)
-
-                # print(",".join(lines[1].split(",")[1:]))
+                cols.extend(new_cols)
+                cols = [element.replace("\n", "") for element in cols]
+                header = ",".join(cols)
 
                 if ".lev" in file:
                     datatype = "AOD"
@@ -657,8 +340,9 @@ class Command(BaseCommand):
                     level=level,
                     base_header_l1=baseheader_l1,
                     base_header_l2=baseheader_l2,
-                    header=header,
                 )
+
+                # print(created)
             except:
                 pass
 
@@ -668,5 +352,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.setup()
         self.setup_header_table()
+        # print("n")
         self.csv()
-        self.push_to_db()
+        self.site_df.to_csv("./src_csvs/sites.csv", index=False)
+        # self.push_to_db()

@@ -203,7 +203,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         .domain(colorDomain)
         .range(colors);
       if (value <= maxValue && value >= 0) {
-        return markerColorScale(value); 
+        return markerColorScale(value);
       } else if (value > maxValue) {
         return d3.color("darkred");
       } else {
@@ -270,19 +270,22 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         const markerColor = setColor(value);
         const fillOpacity =
           markerColor && markerColor === d3.color("grey") ? 0.6 : 0.9;
-        const cruiseMarker = L.circleMarker([coordinates.lat, coordinates.lng], {
-          color: markerColor,
-          radius: markerSize,
-          fillOpacity: fillOpacity,
-          stroke: false,
-          setFillOpacity: fillOpacity,
-          interactive: true,
-          value: value,
-          site: site,
-          date: date,
-          originalColor: markerColor,
-          previousSize: markerSize,
-        }).addTo(siteGroups[site]);
+        const cruiseMarker = L.circleMarker(
+          [coordinates.lat, coordinates.lng],
+          {
+            color: markerColor,
+            radius: markerSize,
+            fillOpacity: fillOpacity,
+            stroke: false,
+            setFillOpacity: fillOpacity,
+            interactive: true,
+            value: value,
+            site: site,
+            date: date,
+            originalColor: markerColor,
+            previousSize: markerSize,
+          },
+        ).addTo(siteGroups[site]);
 
         cruiseMarker.on("click", () => {
           const currentTime = Date.now();
@@ -309,7 +312,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           cruiseMarker
             .bindPopup(
               `<b>Cruise:</b> ${cruiseMarker.options.site}<br>
-                             <b>${type.toUpperCase().replace(/_/g, " ").replace("NM","nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}<br>
+                             <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}<br>
                              <b>Date:</b> ${cruiseMarker.options.date}`,
             )
             .openPopup();
@@ -357,7 +360,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
             layer
               .bindPopup(
                 `<b>Cruise:</b> ${layer.options.site}<br>
-                            <b>${type.toUpperCase().replace(/_/g, " ").replace("NM","nm")}:</b> ${layer.options.value.toFixed(3)}<br>
+                            <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${layer.options.value.toFixed(3)}<br>
                             <b>Date:</b> ${layer.options.date}`,
               )
               .openPopup();

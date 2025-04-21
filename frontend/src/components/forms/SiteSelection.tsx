@@ -245,7 +245,8 @@ const SiteSelectionForm: React.FC<SiteSelectionFormProps> = ({
         </div>
       </div>
       <p className="text-center">
-        Cruises available for selection: {filteredSites.length}
+        Cruises available for selection: {filteredSites.length} <br/>
+        Selected: {selectedSites.size} of {filteredSites.length}
       </p>
       {filteredSites.length > 0 ? (
         <List

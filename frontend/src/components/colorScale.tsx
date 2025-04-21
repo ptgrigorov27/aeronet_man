@@ -48,7 +48,7 @@ if (type.includes("std") || type.includes("aod")) {
     const percentagePosition = (index / (markerTicks.length - 1)) * 100;
  
       return `${percentagePosition}%`;
- });
+ }); 
 
 
  return (
@@ -67,10 +67,10 @@ if (type.includes("std") || type.includes("aod")) {
         textAlign: 'center',
       }}
     >
-      <Typography variant="body1" sx={{ marginBottom: '8px' }}>
-        Data Preview: <strong>{type.toUpperCase().replace(/_/g, ' ').replace("NM","nm")}</strong>
+      <Typography variant="body1" sx={{ marginBottom: '-12px', fontSize:"0.9em" }}>
+        Measurement: <strong>{type.toUpperCase().replace(/_/g, ' ').replace("NM","nm")}</strong>
       </Typography>
-      
+      <hr/>
       <OverlayTrigger
         placement="top"
         overlay={<Tooltip id="tooltip-top">Marker Scale</Tooltip>}
@@ -84,6 +84,7 @@ if (type.includes("std") || type.includes("aod")) {
             border: '0.2px solid #333',
             margin: '0 auto',
             position: 'relative',
+            alignContent: 'center',
           }}
         >
           <Box
@@ -113,15 +114,12 @@ if (type.includes("std") || type.includes("aod")) {
             }}
           />
         </Box>
-      </OverlayTrigger>
+      </OverlayTrigger> 
 
-      <Box sx={{ position: 'relative', width: '278px', margin: '0 auto' }}>
-        <Grid container justifyContent="space-between" sx={{ marginTop: '16px' }}>
+        <Grid container justifyContent="center" sx={{  width: '100%' }}>
+        <Grid container justifyContent="space-between" sx={{ marginTop: '16px', width: '90%' }}>
           {markerTicks.map((tick, index) => (
             <Grid item key={index} sx={{ position: 'relative', textAlign: 'right' }}>
-              <Typography variant="caption" sx={{ position: 'relative', top: '-8px' }}>
-                {tick}
-              </Typography>
               <Box
                 sx={{
                   position: 'absolute',
@@ -129,13 +127,24 @@ if (type.includes("std") || type.includes("aod")) {
                   left: tickPositions[index],
                   width: '1px',
                   height: '5px',
-                  backgroundColor: '#000000',
+                  backgroundColor: "black",
                 }}
               />
             </Grid>
           ))}
         </Grid>
-      </Box>
+        </Grid>
+        <Grid container justifyContent="center" sx={{width: '100%'}}>
+        <Grid container justifyContent="space-between" sx={{marginTop: '0px', width: '100%' }}>
+          {markerTicks.map((tick, index) => (
+            <Grid item key={index} sx={{ position: 'relative', textAlign: 'center',         width: `calc(${parseFloat(tickPositions[1]) / 2}%)` }}>
+              <Typography variant="caption" sx={{ position: 'relative', top: '-8px',fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase'  }}>
+                {tick === 0 ? "0.0": tick}
+              </Typography>
+            </Grid>
+          ))}
+        </Grid>
+        </Grid>
      { traceActive && (<>
       <OverlayTrigger
         placement="top"
@@ -144,8 +153,8 @@ if (type.includes("std") || type.includes("aod")) {
         <Box
           sx={{
             marginTop: '16px',
-            height: '12px',
-            width: '280px',
+            height: '9px',
+            width: '300px',
             backgroundImage: `linear-gradient(to right, ${traceScale(traceDomain[0])}, ${traceScale(traceDomain[1])})`,
             border: '1px solid #333',
             margin: '0 auto',
@@ -154,9 +163,17 @@ if (type.includes("std") || type.includes("aod")) {
         />
       </OverlayTrigger>
 
-      <Grid container justifyContent="space-between" sx={{ width: '280px', marginTop: '20px', margin: '0 auto' }}>
-        <Typography variant="caption">Start</Typography>
-        <Typography variant="caption">End</Typography>
+      <Grid container justifyContent="space-between"   sx={{ width: '300px', marginTop: '20px', margin: '0 auto' }}>
+  <Typography 
+    sx={{ fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase' }}
+  >
+    start
+  </Typography>
+  <Typography 
+    sx={{ fontWeight: 'bold', fontSize: '0.75rem', textTransform: 'uppercase' }}
+  >
+    end
+  </Typography>
       </Grid>   
       </>)}
     </Box>

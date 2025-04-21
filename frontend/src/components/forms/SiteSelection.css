@@ -47,11 +47,13 @@ label {
 }
 
 .site-list-item.selected {
-  background-color: #0a58ca; /* background for selected item */
+  background-color: #0a58ca !important; /* background for selected item */
   color: #f8f9fa; /* contrasting color for selected item */
-  border-radius: 10px;
 }
 
+.site-list-item:nth-child(even) {
+background-color:lightgrey;
+} 
 .site-list-item:hover {
   background-color: grey; /* background on hover */
 }

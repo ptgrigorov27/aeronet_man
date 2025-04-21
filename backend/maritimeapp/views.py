@@ -47,81 +47,24 @@ def point_to_wkt(point):
     return point
 
 
-def process_file(file_path, start_date, end_date, bounds):
-    try:
-        with open(file_path, "r", encoding="latin-1") as f:
-            header_lines = [next(f) for _ in range(4)]
-
-        f.close()
-        df = pd.read_csv(file_path, skiprows=4, encoding="latin-1")
-        print(f"reading file {file_path}")
-        date_format = "%d:%m:%Y"
-
-        df["Date(dd:mm:yyyy)"] = pd.to_datetime(
-            df["Date(dd:mm:yyyy)"], format=date_format, errors="coerce"
-        )
-
-        if df["Date(dd:mm:yyyy)"].isna().any():
-            print(f"Warning: Some dates in {file_path} could not be parsed")
-
-        start_date = (
-            pd.to_datetime(start_date, format="%Y-%m-%d", errors="coerce")
-            if start_date
-            else None
-        )
-        end_date = (
-            pd.to_datetime(end_date, format="%Y-%m-%d", errors="coerce")
-            if end_date
-            else None
-        )
-
-        if start_date:
-            df = df[df["Date(dd:mm:yyyy)"] >= start_date]
-        if end_date:
-            df = df[df["Date(dd:mm:yyyy)"] <= end_date]
-
-        if bounds["min_lat"]:
-            df = df[df["Latitude"] >= float(bounds["min_lat"])]
-        if bounds["max_lat"]:
-            df = df[df["Latitude"] <= float(bounds["max_lat"])]
-        if bounds["min_lng"]:
-            df = df[df["Longitude"] >= float(bounds["min_lng"])]
-        if bounds["max_lng"]:
-            df = df[df["Longitude"] <= float(bounds["max_lng"])]
-
-        print(f"Number of columns after filtering: {df.shape[1]}")
-
-        if df.empty:
-            return
-
-        df["Date(dd:mm:yyyy)"] = df["Date(dd:mm:yyyy)"].dt.strftime(date_format)
-
-        with open(file_path, "w") as f:
-            f.writelines(header_lines)
-            # new filtered data
-            df.to_csv(f, index=False, chunksize=100000, header=True)
-        f.close()
-
-    # TODO: Log exceptions to log file
-    except Exception as e:
-        print(f"Error processing file {file_path}: {e}")
-
-
+import csv
 # ----- Download #TODO: Swap to database downlaod instead of file creation
 import json
 import os
 import shutil
 import subprocess
 import tempfile
-import time
+import time as tme
 from concurrent.futures import ProcessPoolExecutor
-from datetime import datetime
+from datetime import date, datetime, time
 
 import geopandas as gpd
+import polars as pl
 import pyarrow.csv as pv
 from django.contrib.gis.geos import Point, Polygon
 from django.http import HttpResponse, JsonResponse
 from django.utils.dateparse import parse_date
+from django.utils.timezone import make_naive
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
@@ -131,9 +74,87 @@ from .models import *
 @csrf_protect
 @require_POST
 def download_data(request):
+    aod_dict = {
+        "date_DD_MM_YYYY": "Date(dd:mm:yyyy)",
+        "time_HH_MM_SS": "Time(hh:mm:ss)",
+        "air_mass": "Air Mass",
+        "aod_340nm": "AOD_340nm",
+        "aod_380nm": "AOD_380nm",
+        "aod_440nm": "AOD_440nm",
+        "aod_500nm": "AOD_500nm",
+        "aod_675nm": "AOD_675nm",
+        "aod_870nm": "AOD_870nm",
+        "aod_1020nm": "AOD_1020nm",
+        "aod_1640nm": "AOD_1640nm",
+        "water_vapor_CM": "Water Vapor(cm)",
+        "angstrom_exponent_440_870": "440-870nm_Angstrom_Exponent",
+        "std_340nm": "STD_340nm",
+        "std_380nm": "STD_380nm",
+        "std_440nm": "STD_440nm",
+        "std_500nm": "STD_500nm",
+        "std_675nm": "STD_675nm",
+        "std_870nm": "STD_870nm",
+        "std_1020nm": "STD_1020nm",
+        "std_1640nm": "STD_1640nm",
+        "std_water_vapor_CM": "STD_Water_Vapor(cm)",
+        "std_angstrom_exponent_440_870": "STD_440-870nm_Angstrom_Exponent",
+        "number_of_observations": "Number_of_Observations",
+        "last_processing_date_DD_MM_YYYY": "Last_Processing_Date(dd:mm:yyyy)",
+        "aeronet_number": "AERONET_Number",
+        "microtops_number": "Microtops_Number",
+    }
+
+    sda_dict = {
+        "date_DD_MM_YYYY": "Date(dd:mm:yyyy)",
+        "time_HH_MM_SS": "Time(hh:mm:ss)",
+        "julian_day": "Julian_Day",
+        "air_mass": "Air_Mass",
+        "total_aod_500nm": "Total_AOD_500nm(tau_a)",
+        "fine_mode_aod_500nm": "Fine_Mode_AOD_500nm(tau_f)",
+        "coarse_mode_aod_500nm": "Coarse_Mode_AOD_500nm(tau_c)",
+        "fine_mode_fraction_500nm": "FineModeFraction_500nm(eta)",
+        "coarse_mode_fraction_500nm": "CoarseModeFraction_500nm(1_eta)",
+        "regression_dtau_a": "2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)",
+        "rmse_fine_mode_aod_500nm": "RMSE_Fine_Mode_AOD_500nm(Dtau_f)",
+        "rmse_coarse_mode_aod_500nm": "RMSE_Coarse_Mode_AOD_500nm(Dtau_c)",
+        "rmse_fmf_and_cmf_fractions_500nm": "RMSE_FMF_and_CMF_Fractions_500nm(Deta)",
+        "angstrom_exponent_total_500nm": "Angstrom_Exponent(AE)_Total_500nm(alpha)",
+        "dae_dln_wavelength_total_500nm": "dAE/dln(wavelength)_Total_500nm(alphap)",
+        "ae_fine_mode_500nm": "AE_Fine_Mode_500nm(alpha_f)",
+        "dae_dln_wavelength_fine_mode_500nm": "dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)",
+        "aod_870nm": "870nm_Input_AOD",
+        "aod_675nm": "675nm_Input_AOD",
+        "aod_500nm": "500nm_Input_AOD",
+        "aod_440nm": "440nm_Input_AOD",
+        "aod_380nm": "380nm_Input_AOD",
+        "stdev_total_aod_500nm": "STDEV-Total_AOD_500nm(tau_a)",
+        "stdev_fine_mode_aod_500nm": "STDEV-Fine_Mode_AOD_500nm(tau_f)",
+        "stdev_coarse_mode_aod_500nm": "STDEV-Coarse_Mode_AOD_500nm(tau_c)",
+        "stdev_fine_mode_fraction_500nm": "STDEV-FineModeFraction_500nm(eta)",
+        "stdev_coarse_mode_fraction_500nm": "STDEV-CoarseModeFraction_500nm(1_eta)",
+        "stdev_regression_dtau_a": "STDEV-2nd_Order_Reg_Fit_Error_Total_AOD_500nm(regression_dtau_a)",
+        "stdev_rmse_fine_mode_aod_500nm": "STDEV-RMSE_Fine_Mode_AOD_500nm(Dtau_f)",
+        "stdev_rmse_coarse_mode_aod_500nm": "STDEV-RMSE_Coarse_Mode_AOD_500nm(Dtau_c)",
+        "stdev_rmse_fmf_and_cmf_fractions_500nm": "STDEV-RMSE_FMF_and_CMF_Fractions_500nm(Deta)",
+        "stdev_angstrom_exponent_total_500nm": "STDEV-Angstrom_Exponent(AE)_Total_500nm(alpha)",
+        "stdev_dae_dln_wavelength_total_500nm": "STDEV-dAE/dln(wavelength)_Total_500nm(alphap)",
+        "stdev_ae_fine_mode_500nm": "STDEV-AE_Fine_Mode_500nm(alpha_f)",
+        "stdev_dae_dln_wavelength_fine_mode_500nm": "STDEV-dAE/dln(wavelength)_Fine_Mode_500nm(alphap_f)",
+        "stdev_aod_870nm": "STDEV-870nm_Input_AOD",
+        "stdev_aod_675nm": "STDEV-675nm_Input_AOD",
+        "stdev_aod_500nm": "STDEV-500nm_Input_AOD",
+        "solar_zenith_angle": "Solar_Zenith_Angle",
+        "stdev_aod_440nm": "STDEV-440nm_Input_AOD",
+        "stdev_aod_380nm": "STDEV-380nm_Input_AOD",
+        "number_of_observations": "Number_of_Observations",
+        "last_processing_date_DD_MM_YYYY": "Last_Processing_Date(dd:mm:yyyy)",
+        "aeronet_number": "AERONET_Number",
+        "microtops_number": "Microtops_Number",
+    }
+
     src_dir = r"./src"
     temp_base_dir = r"./temp"
-    unique_temp_folder = str(int(time.time())) + "_MAN_DATA"
+    unique_temp_folder = str(int(tme.time())) + "_MAN_DATA"
 
     try:
         data = json.loads(request.body.decode("utf-8"))
@@ -223,24 +244,33 @@ def download_data(request):
                 cur_header = TableHeader.objects.filter(
                     level=quality_map[level], freq=freq, datatype=retrieval
                 ).first()
+
+                if "SDA" in retrieval:
+                    translated_cols = [
+                        sda_dict.get(header, header) for header in fieldnames
+                    ]
+                else:
+                    translated_cols = [
+                        aod_dict.get(header, header) for header in fieldnames
+                    ]
+
                 if cur_header is not None:
                     l1_header = cur_header.base_header_l1
                     l2_header = cur_header.base_header_l2
-                    header = cur_header.header
-
+                    translated_cols.remove("coordinates_wkt")
+                    header = ",".join(translated_cols)
+                    # print(header)
                     query = model.objects.filter(cruise__in=sites, level=level_value)
-
                     if date_filter:
                         query = query.filter(date_filter)
 
                     if all(value is not None for value in bounds.values()):
                         min_point = Point(bounds["min_lng"], bounds["min_lat"])
                         max_point = Point(bounds["max_lng"], bounds["max_lat"])
-
-                        query = query.filter(
-                            coordinates__gte=min_point, coordinates__lte=max_point
+                        bbox_polygon = Polygon.from_bbox(
+                            (min_point.x, min_point.y, max_point.x, max_point.y)
                         )
-
+                        query = query.filter(coordinates__within=bbox_polygon)
                     if query.exists():
                         file_path = os.path.join(full_temp_path, filename + str(".csv"))
 
@@ -252,21 +282,15 @@ def download_data(request):
                             file.close()
 
                         queryset_dict = query.values(*fieldnames)
-                        df = pd.DataFrame(queryset_dict)
-                        # for field in fieldnames:
-                        #     if df[field].dtype == object and isinstance(
-                        #         df[field].iloc[0], Point
-                        #     ):
-                        #         df[field] = df[field].apply(point_to_wkt)
 
-                        # table = pa.Table.from_pandas(df)
-                        # numpy_array = df.to_numpy()
-                        with open(file_path, "a") as file:
-                            df.to_csv(
-                                file, header=False, index=False, chunksize=1000000
-                            )
+                        df = pl.DataFrame(list(queryset_dict))
+                        df = df.drop("coordinates")
+                        df.write_csv(
+                            open(file_path, "a"),
+                            include_header=False,
+                            batch_size=20000,
+                        )
 
-                        file.close()
     try:
         keep_files = ["data_usage_policy.pdf", "data_usage_policy.txt"]
         for policy_file in keep_files:
@@ -331,7 +355,7 @@ from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 from django.views.decorators.http import require_GET
 
-from .models import Site, SiteMeasurementsDaily15
+from .models import Site
 
 
 @require_GET
@@ -356,8 +380,10 @@ def list_sites(request):
 
             # Get all Site IDs that have measurements within the bounding box
             filtered_sites_ids = (
-                SiteMeasurementsDaily15.objects.filter(coordinates__within=bbox_polygon)
-                .values_list("site_id", flat=True)
+                DownloadAODDaily.objects.filter(
+                    coordinates__within=bbox_polygon, level=15
+                )
+                .values_list("cruise", flat=True)
                 .distinct()
             )
 
@@ -409,13 +435,13 @@ def list_sites(request):
 
 from django.db import models
 
-from .models import Site, SiteMeasurementsDaily15
+from .models import DownloadAODDaily, Site
 
 
 @require_GET
 def get_display_info(request):
     returned = []
-    for field in SiteMeasurementsDaily15._meta.get_fields():
+    for field in DownloadAODDaily._meta.get_fields():
         if isinstance(field, models.FloatField):
             returned.append(field.name)
     return JsonResponse({"opts": returned})
@@ -427,7 +453,7 @@ from django.http import JsonResponse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET
 
-from .models import Site, SiteMeasurementsDaily15
+from .models import Site
 
 
 @csrf_protect
@@ -454,29 +480,37 @@ def site_measurements(request):
     sites = (
         Site.objects.filter(name__in=site_names) if site_names else Site.objects.all()
     )
+    queryset = None
+    try:
 
-    queryset = SiteMeasurementsDaily15.objects.filter(site__in=sites)
+        queryset = DownloadAODDaily.objects.filter(cruise__in=sites, level=15)
+        if min_lat and min_lng and max_lat and max_lng:
+            polygon = Polygon.from_bbox(
+                (float(min_lng), float(min_lat), float(max_lng), float(max_lat))
+            )
+            queryset = queryset.filter(coordinates__within=polygon).distinct()
 
-    if min_lat and min_lng and max_lat and max_lng:
-        polygon = Polygon.from_bbox(
-            (float(min_lng), float(min_lat), float(max_lng), float(max_lat))
-        )
-        queryset = queryset.filter(coordinates__within=polygon).distinct()
+        if start_date_str and end_date_str:
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+            queryset = queryset.filter(date_DD_MM_YYYY__range=(start_date, end_date))
+        elif start_date_str:
+            start_date = parse_date(start_date_str)
+            queryset = queryset.filter(date_DD_MM_YYYY__gte=start_date)
+        elif end_date_str:
+            end_date = parse_date(end_date_str)
+            queryset = queryset.filter(date_DD_MM_YYYY__lte=end_date)
 
-    if start_date_str and end_date_str:
-        start_date = parse_date(start_date_str)
-        end_date = parse_date(end_date_str)
-        queryset = queryset.filter(date__range=(start_date, end_date))
-    elif start_date_str:
-        start_date = parse_date(start_date_str)
-        queryset = queryset.filter(date__gte=start_date)
-    elif end_date_str:
-        end_date = parse_date(end_date_str)
-        queryset = queryset.filter(date__lte=end_date)
-
+    except Exception as e:
+        print(e)
     measurements = list(
         queryset.values(
-            "site", "filename", "date", "time", "coordinates", "aeronet_number", aod_key
+            "cruise",
+            "date_DD_MM_YYYY",
+            "time_HH_MM_SS",
+            "coordinates",
+            "aeronet_number",
+            aod_key,
         )
     )
 
@@ -488,5 +522,7 @@ def site_measurements(request):
             measurement["coordinates"] = None
 
         measurement["value"] = measurement.pop(aod_key)
-
+        measurement["date"] = measurement.pop("date_DD_MM_YYYY")
+        measurement["time"] = measurement.pop("time_HH_MM_SS")
+        measurement["site"] = measurement.pop("cruise")
     return JsonResponse(measurements, safe=False)

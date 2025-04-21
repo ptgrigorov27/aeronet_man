@@ -13,7 +13,7 @@ from django.db.models import Max, Min
 from maritimeapp.models import *
 from rest_framework.exceptions import ValidationError
 
-NUM_WORKERS = 5
+NUM_WORKERS = 10
 
 format_one = [
     "all_points.lev10",
@@ -30,6 +30,8 @@ format_two = [
 
 class Command(BaseCommand):
     help = "Download and process file from static URL"
+
+    data = []
 
     @classmethod
     def process_chunk(cls, chunk, filetype, site_name, file):
@@ -72,7 +74,7 @@ class Command(BaseCommand):
             "Microtops_Number",
         ]
         chunk.columns = daily_header
-
+        temp = []
         for _, row in chunk.iterrows():
             try:
                 full_file_name = file + filetype
@@ -96,47 +98,50 @@ class Command(BaseCommand):
                         "aeronet_number": row["AERONET_Number"],
                     },
                 )
-
-                model.objects.get_or_create(
-                    site=site_obj,
-                    filename=full_file_name,
-                    date=date,
-                    time=row["Time(hh:mm:ss)"],
-                    air_mass=float(row["Air Mass"]),
-                    coordinates=latlng,
-                    aod_340nm=float(row["AOD_340nm"]),
-                    aod_380nm=float(row["AOD_380nm"]),
-                    aod_440nm=float(row["AOD_440nm"]),
-                    aod_500nm=float(row["AOD_500nm"]),
-                    aod_675nm=float(row["AOD_675nm"]),
-                    aod_870nm=float(row["AOD_870nm"]),
-                    aod_1020nm=float(row["AOD_1020nm"]),
-                    aod_1640nm=float(row["AOD_1640nm"]),
-                    water_vapor=float(row["Water Vapor(cm)"]),
-                    angstrom_exponent_440_870=float(row["440-870nm_Angstrom_Exponent"]),
-                    std_340nm=float(row["STD_340nm"]),
-                    std_380nm=float(row["STD_380nm"]),
-                    std_440nm=float(row["STD_440nm"]),
-                    std_500nm=float(row["STD_500nm"]),
-                    std_675nm=float(row["STD_675nm"]),
-                    std_870nm=float(row["STD_870nm"]),
-                    std_1020nm=float(row["STD_1020nm"]),
-                    std_1640nm=float(row["STD_1640nm"]),
-                    std_water_vapor=float(row["STD_Water_Vapor(cm)"]),
-                    std_angstrom_exponent_440_870=float(
-                        row["STD_440-870nm_Angstrom_Exponent"]
-                    ),
-                    num_observations=int(row["Number_of_Observations"]),
-                    last_processing_date=last_processing_date,
-                    aeronet_number=int(row["AERONET_Number"]),
-                    microtops_number=int(row["Microtops_Number"]),
+                temp.append(
+                    SiteMeasurementsDaily15(
+                        site=site_obj,
+                        filename=full_file_name,
+                        date=date,
+                        time=row["Time(hh:mm:ss)"],
+                        air_mass=float(row["Air Mass"]),
+                        coordinates=latlng,
+                        aod_340nm=float(row["AOD_340nm"]),
+                        aod_380nm=float(row["AOD_380nm"]),
+                        aod_440nm=float(row["AOD_440nm"]),
+                        aod_500nm=float(row["AOD_500nm"]),
+                        aod_675nm=float(row["AOD_675nm"]),
+                        aod_870nm=float(row["AOD_870nm"]),
+                        aod_1020nm=float(row["AOD_1020nm"]),
+                        aod_1640nm=float(row["AOD_1640nm"]),
+                        water_vapor=float(row["Water Vapor(cm)"]),
+                        angstrom_exponent_440_870=float(
+                            row["440-870nm_Angstrom_Exponent"]
+                        ),
+                        std_340nm=float(row["STD_340nm"]),
+                        std_380nm=float(row["STD_380nm"]),
+                        std_440nm=float(row["STD_440nm"]),
+                        std_500nm=float(row["STD_500nm"]),
+                        std_675nm=float(row["STD_675nm"]),
+                        std_870nm=float(row["STD_870nm"]),
+                        std_1020nm=float(row["STD_1020nm"]),
+                        std_1640nm=float(row["STD_1640nm"]),
+                        std_water_vapor=float(row["STD_Water_Vapor(cm)"]),
+                        std_angstrom_exponent_440_870=float(
+                            row["STD_440-870nm_Angstrom_Exponent"]
+                        ),
+                        num_observations=int(row["Number_of_Observations"]),
+                        last_processing_date=last_processing_date,
+                        aeronet_number=int(row["AERONET_Number"]),
+                        microtops_number=int(row["Microtops_Number"]),
+                    )
                 )
 
             # TODO: Log to file
             except Exception as e:
 
-                print(row)
-                print(e)
+                # print(row)
+                # print(e)
                 try:
                     model.objects.get_or_create(
                         site=site_obj,
@@ -176,6 +181,12 @@ class Command(BaseCommand):
                     )
                 except:
                     pass
+        return temp
+
+    def replace_line(self, line):
+        print("in line ", line)
+
+        print("out line ", line)
 
     def process_file(self, args):
         member = args[0]
@@ -192,7 +203,7 @@ class Command(BaseCommand):
         except Exception as e:
             print("Site Name change error occurred", e)
 
-        chunk_size = 50
+        chunk_size = 1000
         reader = pd.read_csv(
             lev_file,
             nrows=chunk_size,
@@ -208,6 +219,16 @@ class Command(BaseCommand):
                 for chunk in reader
             ]
             concurrent.futures.wait(futures)
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    if future.result() is None:
+                        print(future.keys)
+                    else:
+                        SiteMeasurementsDaily15.objects.bulk_create(future.result())
+                        print(len(self.data))
+
+                except Exception as exc:
+                    print(f"Exception occurred: {exc}")
 
     def handle(self, *args, **options):
         print("Attempting Session")
@@ -248,6 +269,7 @@ class Command(BaseCommand):
             print("Folder exist -> moving to creating threaded processes")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
+
             futures = []
             for root, dirs, files in os.walk(folder_path):
                 for file_name in files:
@@ -259,24 +281,29 @@ class Command(BaseCommand):
                         futures.append(
                             executor.submit(
                                 self.process_file,
-                                (file_path, file_path, file_name, file_endings[4]),
+                                (
+                                    file_path,
+                                    file_path,
+                                    file_name,
+                                    file_endings[4],
+                                ),
                             )
                         )
 
-                    # Insert/Update Daily Level 20
-                    if file_name.endswith(file_endings[5]):
-                        file_path = os.path.join(root, file_name)
-                        file_name = file_name[: -len(file_endings[5])]
-                        print(f"Submitting file {file_name} to thread pool")
-                        futures.append(
-                            executor.submit(
-                                self.process_file,
-                                (file_path, file_path, file_name, file_endings[5]),
-                            )
-                        )
+                    # # Insert/Update Daily Level 20
+                    # if file_name.endswith(file_endings[5]):
+                    #     file_path = os.path.join(root, file_name)
+                    #     file_name = file_name[: -len(file_endings[5])]
+                    #     print(f"Submitting file {file_name} to thread pool")
+                    #     futures.append(
+                    #         executor.submit(
+                    #             self.process_file,
+                    #             (file_path, file_path, file_name, file_endings[5]),
+                    #         )
+                    #     )
 
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    future.result()
+                    pass
                 except Exception as exc:
                     print(f"Exception occurred: {exc}")

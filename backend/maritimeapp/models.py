@@ -18,9 +18,8 @@ class Site(models.Model):
     )
 
     def update_span_date(self):
-        # Set the span date using related SiteMeasurementsDaily15 entries
-        dates = SiteMeasurementsDaily15.objects.filter(site=self).aggregate(
-            start_date=Min("date"), end_date=Max("date")
+        dates = DownloadAODDaily.objects.filter(cruise=self.name, level=15).aggregate(
+            start_date=Min("date_DD_MM_YYYY"), end_date=Max("date_DD_MM_YYYY")
         )
         Site.objects.filter(pk=self.pk).update(
             span_date=[dates["start_date"], dates["end_date"]]
@@ -28,93 +27,12 @@ class Site(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Update span_date after the initial save
         self.update_span_date()
 
-
-class SiteMeasurementsDaily15(models.Model):
-    site = models.ForeignKey(Site, on_delete=models.CASCADE, default=None)
-    filename = models.CharField(max_length=255, default="")
-    date = models.DateField(db_index=True)
-    time = models.TimeField(db_index=False)
-    air_mass = models.FloatField(default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
-    aod_340nm = models.FloatField(default=-999.0)
-    aod_380nm = models.FloatField(default=-999.0)
-    aod_440nm = models.FloatField(default=-999.0)
-    aod_500nm = models.FloatField(default=-999.0)
-    aod_675nm = models.FloatField(default=-999.0)
-    aod_870nm = models.FloatField(default=-999.0)
-    aod_1020nm = models.FloatField(default=-999.0)
-    aod_1640nm = models.FloatField(default=-999.0)
-    water_vapor = models.FloatField(default=-999.0)
-    angstrom_exponent_440_870 = models.FloatField(default=-999.0)
-    std_340nm = models.FloatField(default=-999.0)
-    std_380nm = models.FloatField(default=-999.0)
-    std_440nm = models.FloatField(default=-999.0)
-    std_500nm = models.FloatField(default=-999.0)
-    std_675nm = models.FloatField(default=-999.0)
-    std_870nm = models.FloatField(default=-999.0)
-    std_1020nm = models.FloatField(default=-999.0)
-    std_1640nm = models.FloatField(default=-999.0)
-    std_water_vapor = models.FloatField(default=-999.0)
-    std_angstrom_exponent_440_870 = models.FloatField(default=-999.0)
-    num_observations = models.IntegerField(default=0)
-    last_processing_date = models.DateField()
-    aeronet_number = models.IntegerField(default=0)
-    microtops_number = models.IntegerField(default=0)
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        # Update the span_date in the related Site instance
-        self.site.update_span_date()
-
-    def delete(self, *args, **kwargs):
-        site = self.site
-        super().delete(*args, **kwargs)
-        # Update the span_date in the related Site instance after deletion
-        site.update_span_date()
-
-
-class SiteMeasurementsDaily20(models.Model):
-    site = models.ForeignKey(Site, on_delete=models.CASCADE)
-    filename = models.CharField(max_length=255, default="")
-    date = models.DateField(db_index=True)
-    time = models.TimeField(db_index=False)
-    air_mass = models.FloatField(default=-999.0)
-    coordinates = gis_models.PointField(default=Point(0, 0))
-    aod_340nm = models.FloatField(default=-999.0)
-    aod_380nm = models.FloatField(default=-999.0)
-    aod_440nm = models.FloatField(default=-999.0)
-    aod_500nm = models.FloatField(default=-999.0)
-    aod_675nm = models.FloatField(default=-999.0)
-    aod_870nm = models.FloatField(default=-999.0)
-    aod_1020nm = models.FloatField(default=-999.0)
-    aod_1640nm = models.FloatField(default=-999.0)
-    water_vapor = models.FloatField(default=-999.0)
-    angstrom_exponent_440_870 = models.FloatField(default=-999.0)
-    std_340nm = models.FloatField(default=-999.0)
-    std_380nm = models.FloatField(default=-999.0)
-    std_440nm = models.FloatField(default=-999.0)
-    std_500nm = models.FloatField(default=-999.0)
-    std_675nm = models.FloatField(default=-999.0)
-    std_870nm = models.FloatField(default=-999.0)
-    std_1020nm = models.FloatField(default=-999.0)
-    std_1640nm = models.FloatField(default=-999.0)
-    std_water_vapor = models.FloatField(default=-999.0)
-    std_angstrom_exponent_440_870 = models.FloatField(default=-999.0)
-    num_observations = models.IntegerField(default=0)
-    last_processing_date = models.DateField()
-    aeronet_number = models.IntegerField(default=0)
-    microtops_number = models.IntegerField(default=0)
-
-
-# class DLHead(models.Model):
 
 """
 AP - HeaderCSV
 Updated (02/06/25)
-
 Date(dd:mm:yyyy),
 Time(hh:mm:ss),
 Air Mass,Latitude,
@@ -153,14 +71,16 @@ class DownloadAODAP(models.Model):
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
 
     class Meta:
-        ordering = ["cruise"]
-        db_table = "app_downloadaodap"
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 """
@@ -225,10 +145,16 @@ class DownloadAODDaily(models.Model):
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 """
@@ -293,10 +219,16 @@ class DownloadAODSeries(models.Model):
     aeronet_number = models.IntegerField(default=0)
     microtops_number = models.IntegerField(default=0)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 """
@@ -371,10 +303,17 @@ class DownloadSDAAP(models.Model):
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
+    solar_zenith_angle = models.FloatField(null=True, blank=True, default=-999.0)
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 """
@@ -490,6 +429,7 @@ class DownloadSDADaily(models.Model):
     stdev_dae_dln_wavelength_fine_mode_500nm = models.FloatField(
         null=True, blank=True, default=-999.0
     )
+
     stdev_aod_870nm = models.FloatField(null=True, blank=True, default=-999.0)
     stdev_aod_675nm = models.FloatField(null=True, blank=True, default=-999.0)
     stdev_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
@@ -500,10 +440,16 @@ class DownloadSDADaily(models.Model):
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 class DownloadSDASeries(models.Model):
@@ -571,6 +517,7 @@ class DownloadSDASeries(models.Model):
     stdev_dae_dln_wavelength_fine_mode_500nm = models.FloatField(
         null=True, blank=True, default=-999.0
     )
+
     stdev_aod_870nm = models.FloatField(null=True, blank=True, default=-999.0)
     stdev_aod_675nm = models.FloatField(null=True, blank=True, default=-999.0)
     stdev_aod_500nm = models.FloatField(null=True, blank=True, default=-999.0)
@@ -581,10 +528,16 @@ class DownloadSDASeries(models.Model):
     aeronet_number = models.IntegerField(null=True, blank=True)
     microtops_number = models.IntegerField(null=True, blank=True)
     coordinates = gis_models.PointField(default=Point(0, 0))
+    coordinates_wkt = models.CharField(max_length=255, blank=True, null=True)
     cruise = models.CharField(default="")
     level = models.IntegerField()
     pi = models.CharField(max_length=400, default="")
     pi_email = models.CharField(max_length=400, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["level", "cruise"]),
+        ]
 
 
 class TableHeader(models.Model):
@@ -593,11 +546,12 @@ class TableHeader(models.Model):
     level = models.IntegerField()
     base_header_l1 = models.CharField(
         max_length=9999
-    )  # Ex. Version 3; LEVEL 1.0 Maritime Aerosol Network (MAN) Measurements:  These data are not screened and may not have final calibration applied
+    )  # NOTE: Ex. Version 3; LEVEL 1.0 Maritime Aerosol Network (MAN) Measurements: These data are not screened and may not have final calibration applied
     base_header_l2 = models.CharField(
         max_length=9999
-    )  # Ex. Due to the research and development phase characterizing AERONET-MAN; use of data requires offering co-authorship to Principal Investigators.
-    header = models.CharField(max_length=9999)
+    )  # NOTE: Ex. Due to the research and development phase characterizing AERONET-MAN; use of data requires offering co-authorship to Principal Investigators.
+
+    # NOTE: Header should now be grabbed from table and reverse translated using original keys
 
     class Meta:
         constraints = [
