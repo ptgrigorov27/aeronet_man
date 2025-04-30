@@ -22,7 +22,7 @@ const SidePanel: React.FC = () => {
   const { map } = useMapContext();
   const { setBounds, sites } = useSiteContext();
   const [zoomLevel, setZoomLevel] = useState(map?.getZoom() || 2);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState<boolean>(false);
   const [isSet, setIsSet] = useState(false);
   const [markerSize, setMarkerSize] = useState<number>(4);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
@@ -51,7 +51,10 @@ const SidePanel: React.FC = () => {
   const [filterSym, setFilterSym] = useState<string>("");
   const [fetchedSites, setFetchedSites] = useState<Set<string>>(new Set());
   const [showNotification, setShowNotification] = useState<boolean>(false);
-  const [responseSucess, setResponseSuccess] = useState<boolean>(false);
+  // const [responseSucess, setResponseSuccess] = useState<boolean>(false);
+  const typeSeletion = ["Point", "Series", "Daily"];
+  const levelSelection = ["Level 1.0", "Level 1.5", "Level 2.0"];
+  const readSelection = ["AOD", "SDA"];
   interface DisplayInfoResponse {
     opts: string[];
   }
@@ -228,8 +231,6 @@ const SidePanel: React.FC = () => {
       frequency: Array.from(selectedFrequency),
       quality: Array.from(selectedQuality),
     };
-
-    console.log("DOWNLOAD -> selectedSites", selectedSites);
 
     setShowLoading(true); // Show the download processing indicator
     try {
@@ -553,7 +554,9 @@ const SidePanel: React.FC = () => {
             </div>
             <Button
               variant="warning"
-              onClick={() => map && map.setView([0, 0], 2) && setMarkerSize(2 + (Math.E - 1))}
+              onClick={() =>
+                map && map.setView([0, 0], 2) && setMarkerSize(2 + (Math.E - 1))
+              }
             >
               Reset View
             </Button>
@@ -653,16 +656,8 @@ const SidePanel: React.FC = () => {
             </Button>
           </div>
           <hr className={styles.separator} />
-          {/* remove redundant title for download */}
           {/*<Card.Title>Download</Card.Title>*/}
           <div>
-            {/*<Button
-              variant="primary"
-              onClick={updateMap} 
-              className="w-100"
-            >
-              Update Preview
-            </Button> */}
             <Button
               variant="primary"
               onClick={handleToggleDownloadModal}
@@ -689,7 +684,7 @@ const SidePanel: React.FC = () => {
           </div>
           <h5>Retrieval Options</h5>
           <div className={styles.downloadOptions}>
-            {["AOD", "SDA"].map((option) => (
+            {readSelection.map((option) => (
               <Button
                 key={option}
                 variant={
@@ -704,7 +699,7 @@ const SidePanel: React.FC = () => {
           </div>
           <h5>Reading Frequency</h5>
           <div className={styles.downloadOptions}>
-            {["Point", "Series", "Daily"].map((option) => (
+            {typeSeletion.map((option) => (
               <Button
                 key={option}
                 variant={
@@ -719,7 +714,7 @@ const SidePanel: React.FC = () => {
           </div>
           <h5>Reading Quality</h5>
           <div className={styles.downloadOptions}>
-            {["Level 1.0", "Level 1.5", "Level 2.0"].map((option) => (
+            {levelSelection.map((option) => (
               <Button
                 key={option}
                 variant={
@@ -776,7 +771,7 @@ const SidePanel: React.FC = () => {
                 onDateChange={handleDateChange}
               />
             ) : (
-              <></>
+              <> </>
             )}
           </SiteManager>
         </Modal.Body>
@@ -823,38 +818,7 @@ const SidePanel: React.FC = () => {
               justifyContent: "space-between",
               alignItems: "right",
             }}
-          >
-            {/* 
-          <Card.Header style={{ fontWeight: "bold" }}>
-              VALUE FILTER
-            </Card.Header>
-            <Form.Select
-              style={{ width: "20%" }}
-              value={filterSym}
-              onChange={handleFilterSym}
-              aria-label="Select display option"
-            >
-              {!displayOpts.has(" ") && (
-                <>
-                  <option value="gt">&gt;</option>
-                  <option value="lt">&lt;</option>
-                  <option value="eq">=</option>
-                  <option value="gte">&gt;=</option>
-                  <option value="lte">&lt;=</option>
-                </>
-              )}
-            </Form.Select>
-            <Form.Control
-              type="float"
-              value={filterValue}
-              onChange={handleFilterValue}
-              placeholder="Enter float value"
-              aria-label="Float value input"
-              pattern="^-?\d*(\.\d*)?$"
-              style={{ marginLeft: "10px", width: "50%" }}
-            />
-            */}
-          </div>
+          ></div>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleToggleDataModal}>

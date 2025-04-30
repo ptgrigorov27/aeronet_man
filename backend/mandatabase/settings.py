@@ -104,7 +104,7 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # local
-# # SECURITY WARNING: don't run with debug turned on in production!
+# SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = True
 #
 # CSRF_COOKIE_NAME = "X-CSRFToken"
