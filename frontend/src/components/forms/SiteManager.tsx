@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-  ReactElement,
-} from "react";
+import React, { useEffect, useState, useRef, ReactElement } from "react";
 import { useMapContext } from "../MapContext";
 import L from "leaflet";
 import * as d3 from "d3";
@@ -16,6 +10,7 @@ export interface SiteSelect {
   name: string;
 }
 
+// Defining API's returned marker type
 export interface Marker {
   site: string;
   filename: string;
@@ -67,34 +62,23 @@ const SiteManager: React.FC<SiteManagerProps> = ({
   maxLng,
   type,
   zoom,
-  traceActive,
   setTraceActive,
   markerSize,
-  refreshMarkerSize,
   refreshMarkers,
   selectedSites,
-  sitesSelected,
-  typeChanged,
   children,
 }) => {
   const { map } = useMapContext();
-  const [markerData, setMarkerData] = useState<Marker[]>([]);
-  const [refresh, setRefreshState] = useState<boolean>(false);
-  const [previousMarkerData, setPreviousMarkerData] = useState<Marker[]>([]);
   const [sites, setSites] = useState<SiteSelect[]>([]);
-  const [value, setValue] = useState<string>(type);
   const [colors, setColors] = useState<string[]>([]);
   const [colorDomain, setColorDomain] = useState<number[]>([]);
   const [maxValue, setMaxValue] = useState<number>();
-  const prevZoom = usePrevious(zoom);
-  const prevSitesSelected = usePrevious(selectedSites);
   const prevStartDate = usePrevious(startDate);
   const prevEndDate = usePrevious(endDate);
   const previousMinLat = usePrevious(minLat);
   const previousMaxLat = usePrevious(maxLat);
   const previousMinLng = usePrevious(minLng);
   const previousMaxLng = usePrevious(maxLng);
-  const prevType = usePrevious(type);
 
   function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T>();
@@ -146,10 +130,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     }
   }, [startDate, endDate, prevStartDate, prevEndDate, maxLng, previousMaxLng]);
 
-  const isDataDifferent = (prevData: Marker[], newData: Marker[]) => {
-    return JSON.stringify(prevData) !== JSON.stringify(newData);
-  };
-
+  // INFO: setting color palette associated with type
   const setDomain = async (dataType: string) => {
     const color = [
       "blue",
@@ -160,6 +141,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       "orange",
       "red",
     ];
+
     let domain: number[];
 
     if (dataType.includes("std") || dataType.includes("aod")) {
@@ -183,19 +165,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     setMaxValue(domain[domain.length - 1]);
   };
 
-  const clearMarkers = () => {
-    if (map) {
-      map.eachLayer((layer: L.Layer) => {
-        if (
-          layer instanceof L.CircleMarker ||
-          layer instanceof L.FeatureGroup
-        ) {
-          map.removeLayer(layer);
-        }
-      });
-    }
-  };
-
   const setColor = (value: number) => {
     if (colors.length && colorDomain.length && maxValue !== undefined) {
       let markerColorScale = d3
@@ -213,6 +182,18 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     return d3.color("grey");
   };
 
+  const clearMarkers = () => {
+    if (map) {
+      map.eachLayer((layer: L.Layer) => {
+        if (
+          layer instanceof L.CircleMarker ||
+          layer instanceof L.FeatureGroup
+        ) {
+          map.removeLayer(layer);
+        }
+      });
+    }
+  };
   const fetchMarkers = async () => {
     try {
       const params = {
@@ -262,14 +243,15 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       data.forEach((markerData) => {
         const { coordinates, value, date, site } = markerData;
 
+        // INFO: Create a polyline group for the site
         if (!siteGroups[site]) {
           siteGroups[site] = L.featureGroup().addTo(map);
-          sitePolylineGroups[site] = L.featureGroup(); // Create a polyline group for the site
+          sitePolylineGroups[site] = L.featureGroup();
         }
 
         const markerColor = setColor(value);
         const fillOpacity =
-          markerColor && markerColor === d3.color("grey") ? 0.6 : 0.9;
+          markerColor && markerColor === d3.color("grey") ? 0.3 : 0.9;
         const cruiseMarker = L.circleMarker(
           [coordinates.lat, coordinates.lng],
           {
@@ -287,12 +269,15 @@ const SiteManager: React.FC<SiteManagerProps> = ({
           },
         ).addTo(siteGroups[site]);
 
+        // INFO: Marker Events
         cruiseMarker.on("click", () => {
           const currentTime = Date.now();
+          const doubleClickTime = 1000;
           if (
             lastClickTime &&
             lastClickedSite === site &&
-            currentTime - lastClickTime < 1000 // Time window to double click to reset site view
+            // NOTE: Time between last click to see if user double clicked marker.
+            currentTime - lastClickTime < doubleClickTime
           ) {
             // Handle double-click
             clearMap();
@@ -311,9 +296,13 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         cruiseMarker.on("mouseover", () => {
           cruiseMarker
             .bindPopup(
-              `<b>Cruise:</b> ${cruiseMarker.options.site}<br>
-                             <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}<br>
-                             <b>Date:</b> ${cruiseMarker.options.date}`,
+              `<b>Cruise:</b> ${cruiseMarker.options.site}
+               <br>
+               <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}
+               <br>
+               <b>Frequency:</b> Daily 
+               <br>
+               <b>Date:</b> ${cruiseMarker.options.date}`,
             )
             .openPopup();
         });
@@ -347,21 +336,25 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     map.eachLayer((layer: L.Layer) => {
       if (layer.options.site !== undefined) {
         if (layer.options.site === site) {
+          // INFO: If the marker is selected display it and embolden its attributes
           layer.setStyle({
-            shape: "square",
+            // shape: "square", //shapeMarkers was removed
             fillOpacity: 1,
             color: layer.options.originalColor,
             weight: 2,
             opacity: 1,
             interactive: true,
           });
-
           layer.on("mouseover", () => {
             layer
               .bindPopup(
-                `<b>Cruise:</b> ${layer.options.site}<br>
-                            <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${layer.options.value.toFixed(3)}<br>
-                            <b>Date:</b> ${layer.options.date}`,
+                `<b>Cruise:</b> ${layer.options.site}
+                 <br>
+                 <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${layer.options.value.toFixed(3)}
+                 <br>
+                 <b>Frequency:</b> Daily 
+                 <br>
+                 <b>Date:</b> ${layer.options.date}`,
               )
               .openPopup();
           });
@@ -370,10 +363,9 @@ const SiteManager: React.FC<SiteManagerProps> = ({
             layer.closePopup();
           });
         } else {
+          // INFO: If the marker is not selected hide it and disable functionality
           layer.setStyle({
             fillOpacity: 0.0,
-            color: "grey",
-            weight: 2,
             opacity: 0,
             interactive: false,
           });
@@ -383,9 +375,10 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       }
     });
   };
+
+  // INFO: Given a selected site group trace each site in order by sort
   const drawPolyline = (site: string, markers: Marker[]) => {
     // Remove previous polyline if exists
-
     const sitePolylineGroups: { [key: string]: L.FeatureGroup } = {}; // To store polyline groups
     clearMap();
     setTraceActive(true);
@@ -418,7 +411,7 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     // Create a new polyline group
     const polylineGroup = L.featureGroup().addTo(map);
 
-    // Draw polyline segments with color gradient
+    // Draw polyline segments with d3 color gradient
     coordinatess.forEach((latlng, index) => {
       const nextLatLng = coordinatess[index + 1];
       if (nextLatLng) {
@@ -437,8 +430,8 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     sitePolylineGroups[site] = polylineGroup;
   };
 
+  // INFO: After marker deselection of selected group occurs reset the opacity and color of all markers
   const resetMarkerOpacity = () => {
-    //console.log("reset" + markerSize);
     map.eachLayer((layer: L.Layer) => {
       if (layer instanceof L.CircleMarker) {
         layer.setStyle({
@@ -451,9 +444,13 @@ const SiteManager: React.FC<SiteManagerProps> = ({
         layer.on("mouseover", () => {
           layer
             .bindPopup(
-              `<b>Cruise:</b> ${layer.options.site}<br>
-                        <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}<br>
-                        <b>Date:</b> ${layer.options.date}`,
+              `<b>Cruise:</b> ${layer.options.site}
+               <br>
+               <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}
+               <br>
+               <b>Frequency:</b> Daily 
+               <br>
+               <b>Date:</b> ${layer.options.date}`,
             )
             .openPopup();
         });
@@ -465,18 +462,14 @@ const SiteManager: React.FC<SiteManagerProps> = ({
     });
   };
 
+  // INFO: Get new sites to plot corresponding to user input changes
   const fetchSites = async () => {
     try {
       const params = new URLSearchParams();
       // Append the necessary parameters
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
-      if (
-        minLat !== undefined &&
-        minLng !== undefined &&
-        maxLat !== undefined &&
-        maxLng !== undefined
-      ) {
+      if (minLat && minLng && maxLat && maxLng) {
         params.append("min_lat", minLat.toString());
         params.append("min_lng", minLng.toString());
         params.append("max_lat", maxLat.toString());
@@ -484,9 +477,6 @@ const SiteManager: React.FC<SiteManagerProps> = ({
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
-      );
-      console.log(
         `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
       );
       const data: SiteSelect[] = await response.json();
