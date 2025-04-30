@@ -1,511 +1,833 @@
-import React, { useEffect, useState, useRef, ReactElement } from "react";
-import { useMapContext } from "../MapContext";
+import React, { useState, useCallback, useEffect, ChangeEvent } from "react";
+import { Card, Button, Modal, Form } from "react-bootstrap";
+import { useMapContext } from "./MapContext";
+import SiteManager from "./forms/SiteManager";
+import SiteSelectionForm from "./forms/SiteSelection";
+import { useSiteContext } from "./SiteContext";
+import styles from "./SidePanel.module.css";
 import L from "leaflet";
-import * as d3 from "d3";
-import "leaflet-svg-shape-markers";
-import API_BASE_URL from "../../config";
-import { getCookie } from "../utils/csrf";
+import "leaflet-draw";
+import axios from "axios";
+import LoadingIndicator from "./extra/LoadingIndicator";
+import API_BASE_URL from "../config";
+import ColorLegend from "./colorScale";
+import { getCookie } from "./utils/csrf";
 
 export interface SiteSelect {
   name: string;
+  span_date: [string, string];
 }
 
-// Defining API's returned marker type
-export interface Marker {
-  site: string;
-  filename: string;
-  date: Date;
-  time: Date;
-  coordinates: {
-    lat: number;
-    lng: number;
-  };
-  aeronet_number: number;
-  value: number;
-}
-
-interface SiteManagerProps {
-  startDate: string;
-  endDate: string;
-  minLat?: number;
-  minLng?: number;
-  maxLat?: number;
-  maxLng?: number;
-  type: string;
-  traceActive: boolean;
-  selectedSites?: Set<string>;
-  zoom: number;
-  sitesSelected: boolean;
-  refreshMarkers: boolean;
-  refreshMarkerSize: boolean;
-  typeChanged: boolean;
-  markerSize: number;
-  children: ReactElement<SiteManagerChildProps>;
-  setTraceActive: (active: boolean) => void;
-}
-
-interface SiteManagerChildProps {
-  sites: SiteSelect[];
-  selectedSites: Set<string>;
-  selectSite: (siteName: string) => void;
-  selectAllSites: () => void;
-  deselectAllSites: () => void;
-  setSites: (sites: SiteSelect[]) => void;
-}
-
-const SiteManager: React.FC<SiteManagerProps> = ({
-  startDate,
-  endDate,
-  minLat,
-  minLng,
-  maxLat,
-  maxLng,
-  type,
-  zoom,
-  setTraceActive,
-  markerSize,
-  refreshMarkers,
-  selectedSites,
-  children,
-}) => {
+const SidePanel: React.FC = () => {
   const { map } = useMapContext();
-  const [sites, setSites] = useState<SiteSelect[]>([]);
-  const [colors, setColors] = useState<string[]>([]);
-  const [colorDomain, setColorDomain] = useState<number[]>([]);
-  const [maxValue, setMaxValue] = useState<number>();
-  const prevStartDate = usePrevious(startDate);
-  const prevEndDate = usePrevious(endDate);
-  const previousMinLat = usePrevious(minLat);
-  const previousMaxLat = usePrevious(maxLat);
-  const previousMinLng = usePrevious(minLng);
-  const previousMaxLng = usePrevious(maxLng);
-
-  function usePrevious<T>(value: T): T | undefined {
-    const ref = useRef<T>();
-    useEffect(() => {
-      ref.current = value;
-    }, [value]);
-    return ref.current;
+  const { setBounds, sites } = useSiteContext();
+  const [zoomLevel, setZoomLevel] = useState(map?.getZoom() || 2);
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [isSet, setIsSet] = useState(false);
+  const [markerSize, setMarkerSize] = useState<number>(4);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showDataModal, setShowDataModal] = useState(false);
+  const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
+  const [startDate, setStartDate] = useState<string>("");
+  const [tempSelectedSites, setTempSelectedSites] = useState<Set<string>>(
+    new Set(),
+  );
+  const [refreshMarkers, setRefreshMarkers] = useState<boolean>(false);
+  const [refreshMarkerSize, setRefreshMarkerSize] = useState<boolean>(false);
+  const [typeChanged, setTypeChange] = useState<boolean>(false);
+  const [endDate, setEndDate] = useState<string>("");
+  const [minLat, setMinLat] = useState<number>();
+  const [minLng, setMinLng] = useState<number>();
+  const [maxLat, setMaxLat] = useState<number>();
+  const [maxLng, setMaxLng] = useState<number>();
+  const [rectangle, setRectangle] = useState<L.Rectangle | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [rectangleDrawn, setRectangleDrawn] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
+  const [dataValue, setDataValue] = useState<string>("aod_500nm");
+  const [displayOpts, setDisplayOpts] = useState<Set<string>>(new Set());
+  const [traceActive, setTraceActive] = useState(false);
+  const [filterValue, setFilterValue] = useState<string>("");
+  const [filterSym, setFilterSym] = useState<string>("");
+  const [fetchedSites, setFetchedSites] = useState<Set<string>>(new Set());
+  const [showNotification, setShowNotification] = useState<boolean>(false);
+  // const [responseSucess, setResponseSuccess] = useState<boolean>(false);
+  const typeSeletion = ["Point", "Series", "Daily"];
+  const levelSelection = ["Level 1.0", "Level 1.5", "Level 2.0"];
+  const readSelection = ["AOD", "SDA"];
+  interface DisplayInfoResponse {
+    opts: string[];
   }
 
+  // On site load
   useEffect(() => {
+    const fetchDisplayInfo = async () => {
+      try {
+        const response = await axios.get<DisplayInfoResponse>(
+          `${API_BASE_URL}/maritimeapp/display_info`,
+          {
+            responseType: "json",
+          },
+        );
+        setDisplayOpts(new Set(response.data.opts));
+      } catch (error) {
+        console.error("Error fetching display options:", error);
+      }
+    };
     setTimeout(() => {
-      setDomain(type);
-    }, 300);
+      fetchDisplayInfo();
+      setZoomLevel(2);
+      setMarkerSize((zoomLevel + 2) * (Math.E - 1));
+    }, 500);
   }, []);
 
-  useEffect(() => {
-    if (zoom) {
-      updateMarkerSize(markerSize);
-    }
-  }, [zoom, map]);
-
+  //NOTE: This updates the map on these values change
   useEffect(() => {
     setTimeout(() => {
-      setDomain(type);
-    }, 300);
-  }, [type]);
+      updateMap();
+    }, 500);
+  }, [selectedSites, dataValue, maxLng]);
 
   useEffect(() => {
-    if (refreshMarkers) {
-      setDomain(type);
-      fetchMarkers();
-    }
-  }, [refreshMarkers]);
+    setMarkerSize((zoomLevel + 2) * (Math.E - 1));
+  }, [zoomLevel]);
 
   useEffect(() => {
-    let refresh = false;
-    if (prevStartDate !== startDate || prevEndDate !== endDate) {
-      refresh = true;
-    } else if (
-      previousMaxLng !== maxLng ||
-      previousMaxLat !== maxLat ||
-      previousMinLng !== minLng ||
-      previousMinLat !== minLat
-    ) {
-      refresh = true;
-    }
-    if (refresh) {
-      fetchSites();
-    }
-  }, [startDate, endDate, prevStartDate, prevEndDate, maxLng, previousMaxLng]);
-
-  // INFO: setting color palette associated with type
-  const setDomain = async (dataType: string) => {
-    const color = [
-      "blue",
-      "teal",
-      "green",
-      "chartreuse",
-      "yellow",
-      "orange",
-      "red",
-    ];
-
-    let domain: number[];
-
-    if (dataType.includes("std") || dataType.includes("aod")) {
-      domain = Array.from({ length: 6 }, (_, i) =>
-        parseFloat((i * 0.1).toFixed(1)),
-      );
-    } else if (dataType.includes("water") || dataType.includes("air_mass")) {
-      domain = Array.from({ length: 6 }, (_, i) => i);
-    } else if (dataType.includes("angstrom")) {
-      domain = Array.from({ length: 6 }, (_, i) =>
-        parseFloat((i * (2 / 5)).toFixed(1)),
-      );
-    } else {
-      domain = Array.from({ length: 6 }, (_, i) =>
-        parseFloat((i / 6).toFixed(1)),
-      );
-    }
-
-    setColors(color);
-    setColorDomain(domain);
-    setMaxValue(domain[domain.length - 1]);
-  };
-
-  const setColor = (value: number) => {
-    if (colors.length && colorDomain.length && maxValue !== undefined) {
-      let markerColorScale = d3
-        .scaleLinear<string>()
-        .domain(colorDomain)
-        .range(colors);
-      if (value <= maxValue && value >= 0) {
-        return markerColorScale(value);
-      } else if (value > maxValue) {
-        return d3.color("darkred");
-      } else {
-        return d3.color("grey");
-      }
-    }
-    return d3.color("grey");
-  };
-
-  const clearMarkers = () => {
     if (map) {
-      map.eachLayer((layer: L.Layer) => {
-        if (
-          layer instanceof L.CircleMarker ||
-          layer instanceof L.FeatureGroup
-        ) {
-          map.removeLayer(layer);
-        }
-      });
-    }
-  };
-  const fetchMarkers = async () => {
-    try {
-      const params = {
-        start_date: startDate,
-        end_date: endDate,
-        sites: selectedSites
-          ? Array.from(selectedSites).map((site) => site)
-          : [],
-        min_lat: minLat !== undefined ? minLat.toString() : null,
-        min_lng: minLng !== undefined ? minLng.toString() : null,
-        max_lat: maxLat !== undefined ? maxLat.toString() : null,
-        max_lng: maxLng !== undefined ? maxLng.toString() : null,
-        reading: type,
+      const onZoom = () => {
+        setZoomLevel(map.getZoom());
       };
+      map.on("zoomend", onZoom);
+      return () => {
+        map.off("zoomend", onZoom);
+      };
+    }
+  }, [map, zoomLevel]);
 
+  useEffect(() => {
+    handleBoundaryChange();
+  }, [minLat, minLng, maxLat, maxLng]);
+
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
+  useEffect(() => {
+    if (map) {
+      startSeleted();
+    }
+  }, [map]);
+
+  {
+    /* handle download */
+  }
+  // State for download options
+  const [selectedRetrieval, setSelectedRetrieval] = useState<Set<string>>(
+    new Set(),
+  );
+  const [selectedFrequency, setSelectedFrequency] = useState<Set<string>>(
+    new Set(),
+  );
+  const [selectedQuality, setSelectedQuality] = useState<Set<string>>(
+    new Set(),
+  );
+  const handleToggleDownloadModal = () => {
+    setShowDownloadModal((prev) => !prev);
+  };
+  const handleToggleDataModal = () => {
+    setShowDataModal((prev) => !prev);
+  };
+
+  const handleToggleModal = () => {
+    setShowModal(true);
+  };
+
+  const startSeleted = () => {
+    let sites = new Set<string>();
+    const fetchSites = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        if (
+          minLat !== undefined &&
+          minLng !== undefined &&
+          maxLat !== undefined &&
+          maxLng !== undefined
+        ) {
+          params.append("min_lat", minLat.toString());
+          params.append("min_lng", minLng.toString());
+          params.append("max_lat", maxLat.toString());
+          params.append("max_lng", maxLng.toString());
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
+        );
+        const returned: SiteSelect[] = await response.json();
+        setSelectedSites(new Set<string>(returned.map((site) => site.name)));
+      } catch (error) {
+        console.error("Error fetching sites:", error);
+      }
+    };
+
+    fetchSites();
+    setIsSet(true);
+    setTimeout(() => {
+      setIsSet(false);
+    }, 100);
+  };
+
+  const updateType = () => {
+    setTypeChange(true);
+    setTimeout(() => {
+      setTypeChange(false);
+    }, 100);
+  };
+
+  const updateMarkerSize = () => {
+    setRefreshMarkerSize(true);
+    setTimeout(() => {
+      setRefreshMarkerSize(false);
+    }, 100);
+  };
+  const updateMap = () => {
+    setRefreshMarkers(true);
+    setTimeout(() => {
+      setRefreshMarkers(false);
+    }, 100);
+  };
+
+  const handleOptionToggle = (
+    option: string,
+    setSelectedOptions: React.Dispatch<React.SetStateAction<Set<string>>>,
+  ) => {
+    setSelectedOptions((prev) => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(option)) {
+        newSelection.delete(option);
+      } else {
+        newSelection.add(option);
+      }
+      return newSelection;
+    });
+  };
+
+  const handleDownload = async () => {
+    const params = {
+      sites: Array.from(selectedSites),
+      min_lat: minLat,
+      min_lng: minLng,
+      max_lat: maxLat,
+      max_lng: maxLng,
+      start_date: startDate,
+      end_date: endDate,
+      retrievals: Array.from(selectedRetrieval),
+      frequency: Array.from(selectedFrequency),
+      quality: Array.from(selectedQuality),
+    };
+
+    setShowLoading(true); // Show the download processing indicator
+    try {
       const filteredParams = Object.fromEntries(
         Object.entries(params).filter(([_, v]) => v != null),
       );
       const csrfToken = getCookie("X-CSRFToken");
-      const response = await fetch(
-        `${API_BASE_URL}/maritimeapp/measurements/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrfToken || "",
-          },
-          body: JSON.stringify(filteredParams),
-          credentials: "include",
+      const response = await fetch(`${API_BASE_URL}/maritimeapp/download/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken || "",
         },
-      );
+        body: JSON.stringify(filteredParams),
+        credentials: "include",
+      });
 
       if (!response.ok) {
-        clearMarkers();
-        throw new Error("Network response was not ok");
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const disposition = response.headers.get("content-disposition");
+      const filenameMatch = disposition
+        ? disposition.match(/filename="?(.+)"?/)
+        : null;
+      let filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
+      if (filename.charAt(filename.length - 1) === "_") {
+        filename = filename.slice(0, -1);
       }
 
-      const data: Marker[] = await response.json();
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
 
-      clearMarkers();
-
-      const siteGroups: { [key: string]: L.FeatureGroup } = {};
-      const sitePolylineGroups: { [key: string]: L.FeatureGroup } = {}; // To store polyline groups
-      let lastClickTime: number | null = null;
-      let lastClickedSite: string | null = null;
-
-      data.forEach((markerData) => {
-        const { coordinates, value, date, site } = markerData;
-
-        // INFO: Create a polyline group for the site
-        if (!siteGroups[site]) {
-          siteGroups[site] = L.featureGroup().addTo(map);
-          sitePolylineGroups[site] = L.featureGroup();
-        }
-
-        const markerColor = setColor(value);
-        const fillOpacity =
-          markerColor && markerColor === d3.color("grey") ? 0.3 : 0.9;
-        const cruiseMarker = L.circleMarker(
-          [coordinates.lat, coordinates.lng],
-          {
-            color: markerColor,
-            radius: markerSize,
-            fillOpacity: fillOpacity,
-            stroke: false,
-            setFillOpacity: fillOpacity,
-            interactive: true,
-            value: value,
-            site: site,
-            date: date,
-            originalColor: markerColor,
-            previousSize: markerSize,
-          },
-        ).addTo(siteGroups[site]);
-
-        // INFO: Marker Events
-        cruiseMarker.on("click", () => {
-          const currentTime = Date.now();
-          const doubleClickTime = 1000;
-          if (
-            lastClickTime &&
-            lastClickedSite === site &&
-            // NOTE: Time between last click to see if user double clicked marker.
-            currentTime - lastClickTime < doubleClickTime
-          ) {
-            // Handle double-click
-            clearMap();
-            resetMarkerOpacity();
-            lastClickTime = null;
-            lastClickedSite = null;
-          } else {
-            // Handle single click
-            updateMarkerOpacity(site);
-            drawPolyline(site, data);
-            lastClickTime = currentTime;
-            lastClickedSite = site;
-          }
-        });
-
-        cruiseMarker.on("mouseover", () => {
-          cruiseMarker
-            .bindPopup(
-              `<b>Cruise:</b> ${cruiseMarker.options.site}
-               <br>
-               <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${cruiseMarker.options.value.toFixed(4)}
-               <br>
-               <b>Frequency:</b> Daily 
-               <br>
-               <b>Date:</b> ${cruiseMarker.options.date}`,
-            )
-            .openPopup();
-        });
-
-        cruiseMarker.on("mouseout", () => {
-          cruiseMarker.closePopup();
-        });
-      });
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
     } catch (error) {
-      console.error("Error fetching markers:", error);
+      console.error("Error during download:", error);
+    } finally {
+      setShowNotification(true);
+      setTimeout(() => {
+        setShowNotification(false);
+      }, 5000);
+      setShowLoading(false); // Show the download processing indicator
     }
+    setShowDownloadModal(false);
+  };
+  {
+    /********************/
+  }
+  const handleDone = () => {
+    console.log("ON SAVE DATE: ", startDate, endDate);
+    localStorage.setItem("startDate", startDate);
+    localStorage.setItem("endDate", endDate);
+
+    setSelectedSites(tempSelectedSites);
+    setShowModal(false);
+    setIsSet(true);
+    setTimeout(() => {
+      setIsSet(false);
+    }, 100);
   };
 
-  const toggleTraceActive = (active: boolean) => {
-    setTraceActive(active);
-  };
-
-  const updateMarkerSize = (size: number) => {
-    if (map) {
-      map.eachLayer((layer: L.Layer) => {
-        if (layer instanceof L.CircleMarker) {
-          layer.setStyle({
-            radius: size,
-          });
-        }
-      });
-    }
-  };
-
-  const updateMarkerOpacity = (site: string) => {
-    map.eachLayer((layer: L.Layer) => {
-      if (layer.options.site !== undefined) {
-        if (layer.options.site === site) {
-          // INFO: If the marker is selected display it and embolden its attributes
-          layer.setStyle({
-            // shape: "square", //shapeMarkers was removed
-            fillOpacity: 1,
-            color: layer.options.originalColor,
-            weight: 2,
-            opacity: 1,
-            interactive: true,
-          });
-          layer.on("mouseover", () => {
-            layer
-              .bindPopup(
-                `<b>Cruise:</b> ${layer.options.site}
-                 <br>
-                 <b>${type.toUpperCase().replace(/_/g, " ").replace("NM", "nm")}:</b> ${layer.options.value.toFixed(3)}
-                 <br>
-                 <b>Frequency:</b> Daily 
-                 <br>
-                 <b>Date:</b> ${layer.options.date}`,
-              )
-              .openPopup();
-          });
-
-          layer.on("mouseout", () => {
-            layer.closePopup();
-          });
-        } else {
-          // INFO: If the marker is not selected hide it and disable functionality
-          layer.setStyle({
-            fillOpacity: 0.0,
-            opacity: 0,
-            interactive: false,
-          });
-          layer.off("mouseover");
-          layer.off("mouseout");
-        }
-      }
-    });
-  };
-
-  // INFO: Given a selected site group trace each site in order by sort
-  const drawPolyline = (site: string, markers: Marker[]) => {
-    // Remove previous polyline if exists
-    const sitePolylineGroups: { [key: string]: L.FeatureGroup } = {}; // To store polyline groups
-    clearMap();
-    setTraceActive(true);
-    const oldPolylineGroup = sitePolylineGroups[site];
-    if (oldPolylineGroup) {
-      oldPolylineGroup.eachLayer((layer: L.Layer) => {
-        if (layer instanceof L.Polyline) {
-          oldPolylineGroup.removeLayer(layer);
-        }
-      });
-      map.removeLayer(oldPolylineGroup);
-      delete sitePolylineGroups[site]; // makes sure reference is also deleted
-    }
-
-    const siteMarkers = markers
-      .filter((marker) => marker.site === site)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    const coordinatess = siteMarkers.map((marker) => [
-      marker.coordinates.lat,
-      marker.coordinates.lng,
-    ]);
-
-    // Define color scale
-    const colorScale = d3
-      .scaleLinear<string>()
-      .domain([0, 1])
-      .range(["rgb(255, 0, 0)", "rgb(0, 255, 0)"]);
-
-    // Create a new polyline group
-    const polylineGroup = L.featureGroup().addTo(map);
-
-    // Draw polyline segments with d3 color gradient
-    coordinatess.forEach((latlng, index) => {
-      const nextLatLng = coordinatess[index + 1];
-      if (nextLatLng) {
-        const fraction = index / coordinatess.length;
-        const color = colorScale(fraction);
-        L.polyline([latlng, nextLatLng], {
-          weight: 3,
-          color: color,
-          opacity: 1,
-          interactive: false,
-        }).addTo(polylineGroup);
-      }
-    });
-
-    // Store the new polyline group
-    sitePolylineGroups[site] = polylineGroup;
-  };
-
-  // INFO: After marker deselection of selected group occurs reset the opacity and color of all markers
-  const resetMarkerOpacity = () => {
-    map.eachLayer((layer: L.Layer) => {
-      if (layer instanceof L.CircleMarker) {
-        layer.setStyle({
-          color: layer.options.originalColor,
-          fillOpacity: layer.options.setFillOpacity,
-          weight: 2,
-          interactive: true,
-        });
-
-        layer.on("mouseover", () => {
-          layer
-            .bindPopup(
-              `<b>Cruise:</b> ${layer.options.site}
-               <br>
-               <b>${type.toUpperCase().replace(/_/g, " ")}:</b> ${layer.options.value.toFixed(3)}
-               <br>
-               <b>Frequency:</b> Daily 
-               <br>
-               <b>Date:</b> ${layer.options.date}`,
-            )
-            .openPopup();
-        });
-
-        layer.on("mouseout", () => {
-          layer.closePopup();
-        });
-      }
-    });
-  };
-
-  // INFO: Get new sites to plot corresponding to user input changes
-  const fetchSites = async () => {
-    try {
-      const params = new URLSearchParams();
-      // Append the necessary parameters
-      if (startDate) params.append("start_date", startDate);
-      if (endDate) params.append("end_date", endDate);
-      if (minLat && minLng && maxLat && maxLng) {
-        params.append("min_lat", minLat.toString());
-        params.append("min_lng", minLng.toString());
-        params.append("max_lat", maxLat.toString());
-        params.append("max_lng", maxLng.toString());
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
-      );
-      const data: SiteSelect[] = await response.json();
-      setSites(data);
-    } catch (error) {
-      console.error("Error fetching sites:", error);
-    }
-  };
-
-  const clearMap = () => {
-    toggleTraceActive(false);
-    for (const i in map._layers) {
+  const handleDateChange = useCallback(
+    (newStartDate: string, newEndDate: string) => {
       if (
-        map._layers[i] instanceof L.Polyline &&
-        !(map._layers[i] instanceof L.Rectangle)
+        newStartDate &&
+        newEndDate &&
+        (startDate != newStartDate || endDate != newEndDate)
       ) {
-        try {
-          map.removeLayer(map._layers[i]);
-        } catch (e) {
-          console.log("Problem with " + e + map._layers[i]);
-        }
+        console.log(`Date changed\n${newStartDate} \n${newEndDate}`);
+        setStartDate(newStartDate);
+        setEndDate(newEndDate);
       }
+    },
+    [startDate, endDate],
+  );
+
+  const handleZoomChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const zoom = parseInt(event.target.value, 10);
+    if (map) {
+      map.setZoom(zoom);
+      setZoomLevel(zoom);
     }
   };
 
-  return React.cloneElement(children, {
-    sites,
-    selectedSites,
-  });
+  const handleDataTypeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    setDataValue(event.target.value);
+  };
+
+  const handleFilterSym = (event: ChangeEvent<HTMLSelectElement>) => {
+    setFilterSym(event.target.value);
+  };
+
+  const handleSelectionChangeTemp = (
+    newSelectedSites: Set<string>,
+    type: string,
+  ) => {
+    //console.log("ONCHANGE", newSelectedSites);
+    setTempSelectedSites(newSelectedSites);
+  };
+
+  const drawAction = () => {
+    if (map && !drawing) {
+      setDrawing(true);
+
+      const drawHandler = new L.Draw.Rectangle(map, {
+        shapeOptions: {
+          color: "#ff0000",
+          weight: 2,
+          fill: false,
+          opacity: 1,
+        },
+      });
+
+      drawHandler.enable();
+
+      type DrawCreatedEvent = L.LeafletEvent & {
+        layer: L.Layer & {
+          getBounds: () => L.LatLngBounds;
+        };
+      };
+
+      map.once("draw:created", (event: DrawCreatedEvent) => {
+        const { layer } = event;
+        const bounds = layer.getBounds();
+
+        if (rectangle) {
+          map.removeLayer(rectangle);
+        }
+
+        // Getting bnoundries
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+
+        // Out of bounds correction
+        const minLat = Math.max(-90, Math.min(90, sw.lat.toPrecision(6)));
+        const minLng = Math.max(-180, Math.min(180, sw.lng.toPrecision(6)));
+        const maxLat = Math.max(-90, Math.min(90, ne.lat.toPrecision(6)));
+        const maxLng = Math.max(-180, Math.min(180, ne.lng.toPrecision(6)));
+
+        const correctedBounds = L.latLngBounds(
+          L.latLng(minLat, minLng),
+          L.latLng(maxLat, maxLng),
+        );
+
+        const newBounds = L.rectangle(correctedBounds, {
+          color: "#ff0000", // Red outline
+          weight: 2,
+          fill: false, // No fill
+        }).addTo(map);
+
+        setRectangle(newBounds);
+
+        setMinLat(minLat);
+        setMinLng(minLng);
+        setMaxLat(maxLat);
+        setMaxLng(maxLng);
+        setBounds(bounds);
+
+        setRectangleDrawn(true);
+
+        drawHandler.disable();
+        setDrawing(false);
+      });
+    }
+  };
+
+  const handleFilterValue = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    // Regex pattern to match float values
+    const floatPattern = /^-?\d*(\.\d*)?$/;
+    if (floatPattern.test(value) || value === "") {
+      setFilterValue(value);
+    }
+  };
+  const handleBoundaryChange = () => {
+    if (rectangle && map) {
+      const bounds = new L.LatLngBounds(
+        new L.LatLng(minLat || 0, minLng || 0),
+        new L.LatLng(maxLat || 0, maxLng || 0),
+      );
+      rectangle.setBounds(bounds);
+      //map.fitBounds(bounds);
+      updateSet();
+    }
+  };
+
+  const handleClearBounds = () => {
+    // Remove the rectangle from the map and reset bounds
+    if (rectangle) {
+      map?.removeLayer(rectangle);
+      setRectangle(null);
+    }
+    setBounds(null);
+    setMinLat(undefined);
+    setMinLng(undefined);
+    setMaxLat(undefined);
+    setMaxLng(undefined);
+
+    setRectangleDrawn(false);
+  };
+
+  const siteOptions: SiteSelect[] = sites.map((site) => ({
+    name: site.name,
+    span_date: site.span_date
+      ? [site.span_date[0], site.span_date[1]]
+      : ["", ""],
+  }));
+
+  const updateSet = async () => {
+    const fetchSites = async () => {
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        if (
+          minLat !== undefined &&
+          minLng !== undefined &&
+          maxLat !== undefined &&
+          maxLng !== undefined
+        ) {
+          params.append("min_lat", minLat.toString());
+          params.append("min_lng", minLng.toString());
+          params.append("max_lat", maxLat.toString());
+          params.append("max_lng", maxLng.toString());
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/maritimeapp/measurements/sites/?${params.toString()}`,
+        );
+        const returned: SiteSelect[] = await response.json();
+
+        setFetchedSites(new Set(returned.map((site) => site.name)));
+      } catch (error) {
+        console.error("Error fetching sites:", error);
+      }
+    };
+
+    await fetchSites();
+  };
+
+  useEffect(() => {
+    if (fetchedSites.size > 0) {
+      const newSelection = new Set<string>(
+        Array.from(selectedSites).filter((siteName) =>
+          fetchedSites.has(siteName),
+        ),
+      );
+      setSelectedSites(newSelection);
+    }
+  }, [fetchedSites]);
+
+  return (
+    <>
+      <ColorLegend type={dataValue} activateTrace={traceActive} />
+      {traceActive && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "50px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "#FFFFFFAF",
+            padding: "0.5rem 1rem",
+            borderRadius: "5px",
+            color: "#000",
+            zIndex: 9999,
+            width: "auto",
+            textAlign: "center",
+            pointerEvents: "none",
+            border: "2px solid rgba(255, 255, 255, 0.5)",
+          }}
+        >
+          Double click a visible marker <br /> to exit isolated path mode.
+        </div>
+      )}
+      {showNotification && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "50px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "#0d6efdFF",
+            padding: "0.5rem 1rem",
+            borderRadius: "5px",
+            color: "white",
+            zIndex: 9999,
+            width: "auto",
+            textAlign: "center",
+            pointerEvents: "none",
+            border: "2px solid rgba(255, 255, 255, 0.5)",
+            transition: "opacity 0.5s ease-in-out",
+            opacity: showNotification ? 1 : 0,
+          }}
+        >
+          ⛵ Download started successfully!
+        </div>
+      )}
+      <Card className={styles.sidePanel}>
+        <Card.Body>
+          <Card.Title></Card.Title>
+          <div className={styles.buttonGroup}>
+            <div className={styles.sliderContainer}>
+              <input
+                type="range"
+                min={1}
+                max={19}
+                step={1}
+                value={zoomLevel}
+                onChange={handleZoomChange}
+                className={styles.slider}
+              />
+              <div className={styles.sliderLabel}>Zoom Level: {zoomLevel}</div>
+            </div>
+            <Button
+              variant="warning"
+              onClick={() =>
+                map && map.setView([0, 0], 2) && setMarkerSize(2 + (Math.E - 1))
+              }
+            >
+              Reset View
+            </Button>
+            <div className={styles.buttonContainer}>
+              <SiteManager
+                startDate={startDate}
+                markerSize={markerSize}
+                endDate={endDate}
+                minLat={minLat}
+                minLng={minLng}
+                maxLat={maxLat}
+                maxLng={maxLng}
+                refreshMarkers={refreshMarkers}
+                refreshMarkerSize={refreshMarkerSize}
+                type={dataValue}
+                traceActive={traceActive}
+                zoom={zoomLevel}
+                sitesSelected={isSet}
+                typeChanged={typeChanged}
+                selectedSites={selectedSites}
+                setTraceActive={setTraceActive}
+              >
+                <Button
+                  style={{ marginRight: "5px" }}
+                  variant="success"
+                  className={styles.customButton}
+                  onClick={drawAction}
+                >
+                  Draw Bounds
+                </Button>
+              </SiteManager>
+
+              <Button
+                variant="danger"
+                className={styles.customButton}
+                onClick={handleClearBounds}
+              >
+                Clear Bounds
+              </Button>
+            </div>
+          </div>
+          {rectangleDrawn && (
+            <div className={styles.boundaryInputs}>
+              <Form>
+                <div className={styles.inputRow}>
+                  <Form.Group className={styles.inputGroup}>
+                    <Form.Label>Min Lat</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={minLat || ""}
+                      onChange={(e) => setMinLat(parseFloat(e.target.value))}
+                      onBlur={handleBoundaryChange}
+                    />
+                  </Form.Group>
+                  <Form.Group className={styles.inputGroup}>
+                    <Form.Label>Min Lng</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={minLng || ""}
+                      onChange={(e) => setMinLng(parseFloat(e.target.value))}
+                      onBlur={handleBoundaryChange}
+                    />
+                  </Form.Group>
+                </div>
+                <div className={styles.inputRow}>
+                  <Form.Group className={styles.inputGroup}>
+                    <Form.Label>Max Lat</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={maxLat || ""}
+                      onChange={(e) => setMaxLat(parseFloat(e.target.value))}
+                      onBlur={handleBoundaryChange}
+                    />
+                  </Form.Group>
+                  <Form.Group className={styles.inputGroup}>
+                    <Form.Label>Max Lng</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={maxLng || ""}
+                      onChange={(e) => setMaxLng(parseFloat(e.target.value))}
+                      onBlur={handleBoundaryChange}
+                    />
+                  </Form.Group>
+                </div>
+              </Form>
+            </div>
+          )}
+
+          <hr className={styles.separator} />
+          <Card.Title></Card.Title>
+          <div className={styles.buttonGroup}>
+            <Button variant="secondary" onClick={handleToggleModal}>
+              Cruise Selection
+            </Button>
+            <Button variant="secondary" onClick={handleToggleDataModal}>
+              Display Data
+            </Button>
+          </div>
+          <hr className={styles.separator} />
+          {/*<Card.Title>Download</Card.Title>*/}
+          <div>
+            <Button
+              variant="primary"
+              onClick={handleToggleDownloadModal}
+              className="w-100"
+            >
+              Download
+            </Button>
+          </div>
+        </Card.Body>
+      </Card>
+      {/* Download Modal */}
+      <Modal
+        show={showDownloadModal}
+        onHide={handleToggleDownloadModal}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Download Data</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div>
+            {/* Download Animation */}
+            {showLoading && <LoadingIndicator />}{" "}
+          </div>
+          <h5>Retrieval Options</h5>
+          <div className={styles.downloadOptions}>
+            {readSelection.map((option) => (
+              <Button
+                key={option}
+                variant={
+                  selectedRetrieval.has(option) ? "primary" : "outline-primary"
+                }
+                onClick={() => handleOptionToggle(option, setSelectedRetrieval)}
+                className={styles.optionButton}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+          <h5>Reading Frequency</h5>
+          <div className={styles.downloadOptions}>
+            {typeSeletion.map((option) => (
+              <Button
+                key={option}
+                variant={
+                  selectedFrequency.has(option) ? "primary" : "outline-primary"
+                }
+                onClick={() => handleOptionToggle(option, setSelectedFrequency)}
+                className={styles.optionButton}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+          <h5>Reading Quality</h5>
+          <div className={styles.downloadOptions}>
+            {levelSelection.map((option) => (
+              <Button
+                key={option}
+                variant={
+                  selectedQuality.has(option) ? "primary" : "outline-primary"
+                }
+                onClick={() => handleOptionToggle(option, setSelectedQuality)}
+                className={styles.optionButton}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleToggleDownloadModal}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={handleDownload}>
+            Download
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      {/* Cruise Selection Modal*/}
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Cruise Selection</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <SiteManager
+            startDate={startDate}
+            endDate={endDate}
+            minLat={minLat}
+            minLng={minLng}
+            maxLat={maxLat}
+            maxLng={maxLng}
+            markerSize={markerSize}
+            refreshMarkerSize={refreshMarkerSize}
+            refreshMarkers={refreshMarkers}
+            zoom={zoomLevel}
+            type={dataValue}
+            traceActive={traceActive}
+            sitesSelected={isSet}
+            typeChanged={typeChanged}
+            selectedSites={selectedSites}
+            setTraceActive={setTraceActive}
+          >
+            {showModal ? (
+              <SiteSelectionForm
+                isModalShown={showModal}
+                sites={siteOptions}
+                selectedSites={selectedSites}
+                bounds={[minLat || 0, minLng || 0, maxLat || 0, maxLng || 0]}
+                onSelectionChange={handleSelectionChangeTemp}
+                onDateChange={handleDateChange}
+              />
+            ) : (
+              <> </>
+            )}
+          </SiteManager>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleDone}>
+            Done
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      <Modal show={showDataModal} onHide={handleToggleDataModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Data Display</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Card.Header style={{ fontWeight: "bold" }}>DATA TYPE</Card.Header>
+            <Form.Select
+              style={{ width: "75%" }}
+              value={dataValue}
+              onChange={handleDataTypeChange}
+              aria-label="Select display option"
+            >
+              {!displayOpts.has("aod_500nm") && (
+                <option value="aod_500nm">aod_500nm</option>
+              )}
+
+              {Array.from(displayOpts).map((opt, index) => (
+                <option key={index} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </Form.Select>
+          </div>
+          <br />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "right",
+            }}
+          ></div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleToggleDataModal}>
+            Done
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </>
+  );
 };
 
-export default SiteManager;
+export default SidePanel;
