@@ -255,7 +255,7 @@ const SidePanel: React.FC = () => {
       const filenameMatch = disposition
         ? disposition.match(/filename="?(.+)"?/)
         : null;
-      let filename = filenameMatch ? filenameMatch[1] : "man_dataset.tar.gz";
+      let filename = filenameMatch ? filenameMatch[1] : "man_dataset.zip";
       if (filename.charAt(filename.length - 1) === "_") {
         filename = filename.slice(0, -1);
       }
