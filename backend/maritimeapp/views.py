@@ -306,13 +306,8 @@ def download_data(request):
                 print(f"Source policy file {src_policy_file} does not exist")
 
         subprocess.run(
-            [
-                "zip",
-                "-r -X",
-                # os.path.join("./temp", zip_path.split("/")[2]),
-                zip_filename,
-                directory_to_archive,
-            ],
+            ["zip", "-r", "-X", zip_filename, unique_temp_folder],
+            cwd="./temp/"
             check=True,
         )
         print(f"Successfully created {zip_filename} from {directory_to_archive}")
