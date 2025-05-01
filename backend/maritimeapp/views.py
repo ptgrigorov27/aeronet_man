@@ -326,7 +326,7 @@ def download_data(request):
         with open(zip_path, "rb") as f:
             response = HttpResponse(
                 f.read(),
-                content_type="application/gzip",
+                content_type="application/zip",
                 headers={
                     "Content-Disposition": f'attachment; filename="{zip_filename}"'
                 },
