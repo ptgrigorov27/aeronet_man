@@ -307,7 +307,7 @@ def download_data(request):
 
         subprocess.run(
             ["zip", "-r", "-X", zip_filename, unique_temp_folder],
-            cwd="./temp/"
+            cwd="./temp/",
             check=True,
         )
         print(f"Successfully created {zip_filename} from {directory_to_archive}")
