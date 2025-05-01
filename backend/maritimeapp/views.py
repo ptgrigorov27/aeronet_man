@@ -190,8 +190,8 @@ def download_data(request):
 
     # print(sites, retrievals, frequency, quality)
 
-    tar_filename = f"{unique_temp_folder}.tar.gz"
-    tar_path = os.path.join(temp_base_dir, tar_filename)
+    zip_filename = f"{unique_temp_folder}.zip"
+    zip_path = os.path.join(temp_base_dir, zip_filename)
     directory_to_archive = os.path.join(temp_base_dir, unique_temp_folder)
 
     model = None
@@ -307,16 +307,15 @@ def download_data(request):
 
         subprocess.run(
             [
-                "tar",
-                "-czvf",
-                os.path.join("./temp", tar_path.split("/")[2]),
-                "-C",
-                full_temp_path,
-                ".",
+                "zip",
+                "-r -X",
+                # os.path.join("./temp", zip_path.split("/")[2]),
+                zip_filename,
+                directory_to_archive,
             ],
             check=True,
         )
-        print(f"Successfully created {tar_filename} from {directory_to_archive}")
+        print(f"Successfully created {zip_filename} from {directory_to_archive}")
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while creating the tar file: {e}")
         return JsonResponse(
@@ -324,12 +323,12 @@ def download_data(request):
         )
 
     try:
-        with open(tar_path, "rb") as f:
+        with open(zip_path, "rb") as f:
             response = HttpResponse(
                 f.read(),
                 content_type="application/gzip",
                 headers={
-                    "Content-Disposition": f'attachment; filename="{tar_filename}"'
+                    "Content-Disposition": f'attachment; filename="{zip_filename}"'
                 },
             )
 
@@ -340,9 +339,9 @@ def download_data(request):
         if os.path.exists(full_temp_path):
             shutil.rmtree(full_temp_path)
             print(f"Deleted temporary directory {full_temp_path}")
-        if os.path.exists(tar_path):
-            os.remove(tar_path)
-            print(f"Deleted temporary file {tar_path}")
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+            print(f"Deleted temporary file {zip_path}")
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
