@@ -305,11 +305,13 @@ def download_data(request):
             else:
                 print(f"Source policy file {src_policy_file} does not exist")
 
+        print("zip", "-r", "-X", zip_filename, unique_temp_folder)
         subprocess.run(
             ["zip", "-r", "-X", zip_filename, unique_temp_folder],
             cwd="./temp/",
             check=True,
         )
+
         print(f"Successfully created {zip_filename} from {directory_to_archive}")
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while creating the tar file: {e}")
