@@ -6,7 +6,7 @@ import { Container } from "react-bootstrap";
 import styles from "./MapComponent.module.css";
 import { useMapContext } from "./MapContext";
 import * as d3 from "d3";
-import ColorLegend from './colorScale';
+import ColorLegend from "./colorScale";
 import CustomControls from "./CustomControls";
 
 interface MapComponentProps {
@@ -14,7 +14,6 @@ interface MapComponentProps {
   zoom: number;
   type: string;
 }
-
 
 const CustomMapLayer: React.FC = () => {
   const map = useMap();
@@ -53,7 +52,7 @@ const CustomMapLayer: React.FC = () => {
       "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
       {
         noWrap: true,
-        minZoom: 0,
+        minZoom: 3,
         maxZoom: 20,
         subdomains: "abcd",
       },
@@ -64,18 +63,13 @@ const CustomMapLayer: React.FC = () => {
     //createColorLegend().addTo(map);
 
     map.options.preferCanvas = true;
-    map.setMinZoom(1);
+    map.setMinZoom(3);
     map.setMaxZoom(19);
-    map.setMaxBounds([
-      [-90, -180], 
-      [90, 180]    
-    ]);
 
     setMap(map);
-
     return () => {
       map.removeLayer(basemapLayer);
-       map.removeLayer(references);
+      map.removeLayer(references);
       removeAllControls();
     };
   }, [map, setMap]);
@@ -91,10 +85,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ center, zoom, type }) => {
         center={center}
         zoom={zoom}
         attributionControl={false}
-        style={{ height: "100%", width: "100%" }}
+        style={{ height: "100vh", width: "100vw" }}
       >
-
-        <CustomControls /> 
+        <CustomControls />
         <CustomMapLayer />
       </MapContainer>
     </Container>

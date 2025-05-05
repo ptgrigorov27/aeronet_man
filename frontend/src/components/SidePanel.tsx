@@ -21,7 +21,7 @@ export interface SiteSelect {
 const SidePanel: React.FC = () => {
   const { map } = useMapContext();
   const { setBounds, sites } = useSiteContext();
-  const [zoomLevel, setZoomLevel] = useState(map?.getZoom() || 2);
+  const [zoomLevel, setZoomLevel] = useState(map?.getZoom() || 3);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [isSet, setIsSet] = useState(false);
   const [markerSize, setMarkerSize] = useState<number>(4);
@@ -51,6 +51,7 @@ const SidePanel: React.FC = () => {
   const [filterSym, setFilterSym] = useState<string>("");
   const [fetchedSites, setFetchedSites] = useState<Set<string>>(new Set());
   const [showNotification, setShowNotification] = useState<boolean>(false);
+  const [collapsed, setCollapsed] = useState(false);
   // const [responseSucess, setResponseSuccess] = useState<boolean>(false);
   const typeSeletion = ["Point", "Series", "Daily"];
   const levelSelection = ["Level 1.0", "Level 1.5", "Level 2.0"];
@@ -76,7 +77,7 @@ const SidePanel: React.FC = () => {
     };
     setTimeout(() => {
       fetchDisplayInfo();
-      setZoomLevel(2);
+      setZoomLevel(3);
       setMarkerSize((zoomLevel + 2) * (Math.E - 1));
     }, 500);
   }, []);
@@ -489,8 +490,42 @@ const SidePanel: React.FC = () => {
     }
   }, [fetchedSites]);
 
+  const toggleCollapse = () => {
+    setCollapsed(!collapsed);
+  };
+
   return (
     <>
+      <h5
+        style={{
+          zIndex: 1001,
+          top: "15rem",
+          right: collapsed ? "2rem" : "21.8rem",
+          transform: "rotate(270deg)",
+          transformOrigin: "right top",
+          whiteSpace: "nowrap",
+          margin: "0",
+          position: "fixed",
+          height: "auto",
+          color: "black",
+          backgroundColor: "rgba(255, 255, 255, 0.9)",
+          textDecoration: "none",
+        }}
+      >
+        <button
+          style={{
+            color: "inherit",
+            textDecoration: "none",
+          }}
+          className="btn btn-link"
+          onClick={toggleCollapse}
+          aria-expanded={!collapsed}
+          aria-controls="collapseMod"
+        >
+          {collapsed ? "Show" : "Hide"}
+        </button>
+      </h5>
+
       <ColorLegend type={dataValue} activateTrace={traceActive} />
       {traceActive && (
         <div
@@ -536,14 +571,25 @@ const SidePanel: React.FC = () => {
           ⛵ Download started successfully!
         </div>
       )}
-      <Card className={styles.sidePanel}>
+      <Card
+        id="collapseMod"
+        style={{
+          width: "18rem",
+          position: "fixed",
+          right: "1.5rem",
+          top: "1.5rem",
+          zIndex: 1000,
+          background: "rgba(255, 255, 255, 0.9) !important",
+        }}
+        className={`collapse ${collapsed ? "" : "show"}`}
+      >
         <Card.Body>
           <Card.Title></Card.Title>
           <div className={styles.buttonGroup}>
             <div className={styles.sliderContainer}>
               <input
                 type="range"
-                min={1}
+                min={3}
                 max={19}
                 step={1}
                 value={zoomLevel}
@@ -555,7 +601,7 @@ const SidePanel: React.FC = () => {
             <Button
               variant="warning"
               onClick={() =>
-                map && map.setView([0, 0], 2) && setMarkerSize(2 + (Math.E - 1))
+                map && map.setView([0, 0], 3) && setMarkerSize(3 + (Math.E - 1))
               }
             >
               Reset View

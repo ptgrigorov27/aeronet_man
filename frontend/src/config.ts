@@ -1,5 +1,5 @@
 /**
- * All the configuration variables are stored here
+Configuration variables are stored here
  top is local 
  second is prod
  */

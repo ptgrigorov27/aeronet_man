@@ -308,7 +308,7 @@ def download_data(request):
         print("zip", "-r", "-X", zip_filename, unique_temp_folder)
         subprocess.run(
             ["zip", "-r", "-X", zip_filename, unique_temp_folder],
-            cwd="./temp/",
+            cwd=temp_base_dir,
             check=True,
         )
 
